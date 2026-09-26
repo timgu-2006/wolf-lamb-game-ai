@@ -244,8 +244,10 @@
         <label for="sharedOn">Shared game</label>
         <div class="inline">
           <input type="checkbox" id="sharedOn">
-          <span class="hint" style="margin:0">play the server's game: you are Wolf, lambs by</span>
-          <select id="sharedLamb"><option value="tables">the tables</option><option value="remote">remote player</option></select>
+          <span class="hint" style="margin:0">wolf:</span>
+          <select id="sharedWolf"><option value="browser" selected>me (browser)</option><option value="tables">the tables</option><option value="remote">remote player</option></select>
+          <span class="hint" style="margin:0">lamb:</span>
+          <select id="sharedLamb"><option value="browser">me (browser)</option><option value="tables" selected>the tables</option><option value="remote">remote player</option></select>
           <button id="sharedNew">New shared game</button>
           <span id="sharedState" class="hint" style="margin:0"></span>
         </div>
@@ -525,7 +527,8 @@
   $('useOracle').addEventListener('change', schedule);
 
   // ---- shared game (server-owned, synced by polling) ---------------------
-  let shared = false, sharedVersion = -1, sharedTimer = null, sharedId = null;
+  let shared = false, sharedVersion = -1, sharedTimer = null, sharedId = null, sharedPlayers = { wolf: 'browser', lamb: 'tables' };
+  const browserPlays = side => shared && sharedPlayers[side === E.WOLF ? 'wolf' : 'lamb'] === 'browser';
   const sharedBase = 'http://localhost:8787';
   async function sharedApi(p, method) {
     try { const r = await fetch(sharedBase + p, { method: method || 'GET', cache: 'no-store' }); return await r.json(); } catch (e) { return null; }
@@ -546,14 +549,15 @@
     if (!g.id) { $('sharedState').textContent = 'no game yet: press New shared game'; return; }
     const sig = g.moves.map(m => m.from + '-' + m.to).join(',');
     const localSig = history[history.length - 1].moves.map(m => m.from + '-' + m.to).join(',');
+    if (g.players) sharedPlayers = g.players;
     if (g.version !== sharedVersion || g.id !== sharedId || sig !== localSig) {
       sharedVersion = g.version; sharedId = g.id;
       rebuildFromMoves(g.moves);
       schedule();
     }
     const last = g.moves.length ? g.moves[g.moves.length - 1] : null;
-    $('sharedState').textContent = 'game ' + g.id.slice(11, 19).replace(/-/g, ':') + ' · lambs by ' + g.lambBy + ' · ' + g.moves.length + ' plies' +
-      (g.result ? ' · over' : g.sideToMove === E.WOLF ? ' · your move' : g.lambBy === 'remote' ? ' · waiting for the remote lamb' : '') +
+    $('sharedState').textContent = 'game ' + g.id.slice(11, 19).replace(/-/g, ':') + ' · wolf ' + sharedPlayers.wolf + ', lamb ' + sharedPlayers.lamb + ' · ' + g.moves.length + ' plies' +
+      (g.result ? ' · over' : g.toMoveBy === 'browser' ? ' · your move (' + E.sideName(g.sideToMove) + ')' : ' · waiting for the ' + g.toMoveBy + ' ' + E.sideName(g.sideToMove)) +
       (last && last.blunder ? ' · last move was an exact blunder' : '');
   }
   async function sharedMove(em) {
@@ -568,7 +572,8 @@
     render();
   }
   $('sharedOn').addEventListener('change', () => setShared($('sharedOn').checked));
-  $('sharedNew').addEventListener('click', async () => { if (!shared) { $('sharedOn').checked = true; setShared(true); } await sharedApi('/game/new?lamb=' + $('sharedLamb').value, 'POST'); sharedVersion = -1; syncShared(); });
+  const newSharedQuery = () => '/game/new?wolf=' + $('sharedWolf').value + '&lamb=' + $('sharedLamb').value;
+  $('sharedNew').addEventListener('click', async () => { if (!shared) { $('sharedOn').checked = true; setShared(true); } await sharedApi(newSharedQuery(), 'POST'); sharedVersion = -1; syncShared(); });
 
   // ---- scheduling: what should the engine be doing right now? -----------
   let aiTimer = null;
@@ -654,7 +659,7 @@
   function playMove(em) {
     const s = cur();
     if (!E.isLegal(s, em)) return;
-    if (shared) { if (s.side === E.WOLF && atEnd()) { selected = null; sharedMove(em); } return; }
+    if (shared) { if (browserPlays(s.side) && atEnd()) { selected = null; sharedMove(em); } return; }
     if (!atEnd()) { history = history.slice(0, cursor + 1); evals = evals.slice(0, cursor + 1); oracle = oracle.slice(0, cursor + 1); }
     history.push(E.applyMove(s, em)); evals.push(null); oracle.push(null);
     cursor = history.length - 1;
@@ -880,7 +885,7 @@
         text(bx, by + 10, o.winner === 3 ? '' : (o.dExact === false ? '\u2265' : '') + String(moveLen(o)), 'sc', g);
         g.addEventListener('mouseenter', () => { hoverMove = id; renderBoard(); });
         g.addEventListener('mouseleave', () => { hoverMove = null; renderBoard(); });
-        g.addEventListener('click', ev => { ev.stopPropagation(); hoverMove = null; if (shared) { if (s.side === E.WOLF && atEnd()) sharedMove(m); } else if (!aiControls(s.side) || !atEnd()) playMove(m); });
+        g.addEventListener('click', ev => { ev.stopPropagation(); hoverMove = null; if (shared) { if (browserPlays(s.side) && atEnd()) sharedMove(m); } else if (!aiControls(s.side) || !atEnd()) playMove(m); });
       }
       if (hovering) {
         const o = ox.moves.find(o => (o.from | (o.to << 5)) === hoverMove);
@@ -941,7 +946,7 @@
     if (setup) return;
     const s = cur();
     if (E.result(s) || aiControls(s.side)) return;
-    if (shared && (s.side !== E.WOLF || !atEnd())) return;
+    if (shared && (!browserPlays(s.side) || !atEnd())) return;
     const legal = E.legalMoves(s);
     if (selected !== null) {
       const m = legal.find(x => x.from === selected && x.to === i);
@@ -963,7 +968,7 @@
     } else {
       $('status').textContent = E.sideName(s.side) + ' to move ' + (s.side === E.WOLF ? '\u{1F43A}' : '\u{1F411}');
       $('reason').textContent = !atEnd() ? 'viewing move ' + cursor + ' of ' + (history.length - 1)
-        : shared ? (s.side === E.WOLF ? 'shared game: your move as Wolf' : 'shared game: waiting for the lamb move')
+        : shared ? (browserPlays(s.side) ? 'shared game: your move as ' + E.sideName(s.side) : 'shared game: waiting for the ' + E.sideName(s.side) + ' move')
         : aiControls(s.side) ? 'engine is choosing a move' : selected === null ? 'select a piece' : 'select a destination';
     }
     const ev = evals[cursor], ox = oracle[cursor];
@@ -1013,7 +1018,7 @@
           '<td class="' + exactClass(o.winner, s.side) + '">' + exactMoveText(o, s.side) + (o.tactic ? ' <span title="' + o.tactic + '">\u26A1</span>' : '') + '</td><td>' + repliesText(o) + '</td><td class="pvcell">' + (line ? exactLineText(E.applyMove(s, em), line) : '…') + '</td>';
         tr.addEventListener('mouseenter', () => { hoverMove = id; renderBoard(); });
         tr.addEventListener('mouseleave', () => { hoverMove = null; renderBoard(); });
-        tr.addEventListener('click', () => { hoverMove = null; if (shared) { if (s.side === E.WOLF && atEnd()) sharedMove(em); } else if (!aiControls(s.side) || !atEnd()) playMove(em); });
+        tr.addEventListener('click', () => { hoverMove = null; if (shared) { if (browserPlays(s.side) && atEnd()) sharedMove(em); } else if (!aiControls(s.side) || !atEnd()) playMove(em); });
         tb.appendChild(tr);
       });
       tbl.appendChild(tb); box.appendChild(tbl);
@@ -1162,7 +1167,7 @@
     while (history.length > 1 && $('mode').value !== 'aa' && $('mode').value !== 'hh' && aiControls(history[history.length - 1].side)) { history.pop(); evals.pop(); oracle.pop(); }
     cursor = history.length - 1; selected = null; schedule();
   });
-  $('reset').addEventListener('click', async () => { if (shared) { await sharedApi('/game/new?lamb=' + $('sharedLamb').value, 'POST'); sharedVersion = -1; syncShared(); return; } leaveSetup(); history = [E.initialState()]; evals = [null]; oracle = [null]; cursor = 0; selected = null; schedule(); });
+  $('reset').addEventListener('click', async () => { if (shared) { await sharedApi(newSharedQuery(), 'POST'); sharedVersion = -1; syncShared(); return; } leaveSetup(); history = [E.initialState()]; evals = [null]; oracle = [null]; cursor = 0; selected = null; schedule(); });
   $('aimove').addEventListener('click', () => {
     if (E.result(cur())) return;
     if (!atEnd()) { history = history.slice(0, cursor + 1); evals = evals.slice(0, cursor + 1); oracle = oracle.slice(0, cursor + 1); }

@@ -21,11 +21,12 @@
  *        loser slowest, draws avoid repeating), at most n plies
  *
  *   Shared game (one game at a time, stored in solver/games/<id>.json):
- *   GET  /game                      -> { id, moves, lambBy, values, result, ... }
- *   POST /game/new?lamb=tables|remote   start a new game; the lamb side is played by the
- *                                   tables at once, or must be posted by a remote player
+ *   GET  /game                      -> { id, moves, players, result, ... }
+ *   POST /game/new?wolf=<p>&lamb=<p>  start a new game; each side's player p is
+ *                                   browser (the page), tables (answers at once) or remote
+ *                                   (moves posted from the command line)
  *   POST /game/move?from=<cell>&to=<cell>  play a move for the side to move
- *   POST /game/undo                 take back the last ply (two plies when the tables answer)
+ *   POST /game/undo                 take back the last ply, plus any tables replies before it
  *
  * Every response carries Access-Control-Allow-Origin: * so a page opened from
  * file:// can query it. Only listens on localhost.
@@ -52,7 +53,8 @@ function send(res, code, obj) {
 // ---- shared game -----------------------------------------------------------
 const GAMES_DIR = path.join(__dirname, 'games');
 fs.mkdirSync(GAMES_DIR, { recursive: true });
-let game = null;   // { id, started, lambBy, moves: [{from,to,capture,by,value,t}], version }
+let game = null;   // { id, started, players: {wolf, lamb}, moves: [{from,to,capture,by,value,t}], version }
+const PLAYERS = ['browser', 'tables', 'remote'];
 function gameState(g) {   // replay the record with the reference engine
   let s = E.initialState();
   for (const m of g.moves) s = E.applyMove(s, { from: m.from, to: m.to, capture: m.capture ? m.to : null });
@@ -60,11 +62,13 @@ function gameState(g) {   // replay the record with the reference engine
 }
 function exact(s) { const p = B.fromState(s); const v = TB.value(p, s.turnsSinceCapture); return { winner: v.winner, d: v.d, dExact: v.dExact }; }
 function saveGame(g) { fs.writeFileSync(path.join(GAMES_DIR, g.id + '.json'), JSON.stringify(g, null, 1)); }
-function newGame(lambBy) {
-  game = { id: new Date().toISOString().replace(/[:.]/g, '-'), started: Date.now(), lambBy, moves: [], version: 1, start: exact(E.initialState()) };
+function newGame(players) {
+  game = { id: new Date().toISOString().replace(/[:.]/g, '-'), started: Date.now(), players, moves: [], version: 1, start: exact(E.initialState()) };
+  autoReply(game);
   saveGame(game);
   return game;
 }
+function playerOf(g, side) { return g.players[side === E.WOLF ? 'wolf' : 'lamb']; }
 function applyRecorded(g, em, by) {
   const s = gameState(g);
   if (!E.isLegal(s, em)) return 'illegal move';
@@ -77,15 +81,17 @@ function applyRecorded(g, em, by) {
   if (r) g.result = { winner: r.winner, reason: r.reason };
   return null;
 }
-function tablesReply(g) {   // the tables play the lamb side with the trap ranking
-  const s = gameState(g);
-  if (E.result(s) || s.side !== E.LAMB) return;
-  const opts = TB.bestMoves(B.fromState(s), s.turnsSinceCapture, { depth: DEPTH });
-  applyRecorded(g, B.toEngineMove(opts[0].move), 'tables');
+function autoReply(g) {   // while the side to move is played by the tables, play the trap-ranked best move
+  for (let guard = 0; guard < 400; guard++) {
+    const s = gameState(g);
+    if (E.result(s) || playerOf(g, s.side) !== 'tables') return;
+    const opts = TB.bestMoves(B.fromState(s), s.turnsSinceCapture, { depth: DEPTH });
+    applyRecorded(g, B.toEngineMove(opts[0].move), 'tables');
+  }
 }
 function gameJson(g) {
   const s = gameState(g);
-  return { id: g.id, lambBy: g.lambBy, version: g.version, moves: g.moves, sideToMove: s.side, result: g.result || null, lambs: s.lambs, clock: s.turnsSinceCapture, start: g.start };
+  return { id: g.id, players: g.players, version: g.version, moves: g.moves, sideToMove: s.side, toMoveBy: E.result(s) ? null : playerOf(g, s.side), result: g.result || null, lambs: s.lambs, clock: s.turnsSinceCapture, start: g.start };
 }
 
 const DEPTH = 3;   // opponent moves considered by the blunder probability
@@ -119,22 +125,26 @@ const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') return send(res, 204, {});
   if (u.pathname === '/health') return send(res, 200, { ok: true, tables: TB.TABLES, clock: TB.CLOCK, game: game ? game.id : null });
   if (u.pathname === '/game') return send(res, 200, game ? gameJson(game) : { id: null });
-  if (u.pathname === '/game/new') { newGame(u.searchParams.get('lamb') === 'remote' ? 'remote' : 'tables'); return send(res, 200, gameJson(game)); }
+  if (u.pathname === '/game/new') {
+    const pick = (v, d) => PLAYERS.includes(v) ? v : d;
+    newGame({ wolf: pick(u.searchParams.get('wolf'), 'browser'), lamb: pick(u.searchParams.get('lamb'), 'tables') });
+    return send(res, 200, gameJson(game));
+  }
   if (u.pathname === '/game/undo') {
     if (!game) return send(res, 400, { error: 'no game' });
-    if (game.moves.length) { game.moves.pop(); if (game.lambBy === 'tables' && game.moves.length && game.moves[game.moves.length - 1].by === 'tables') game.moves.pop(); }
+    if (game.moves.length) { game.moves.pop(); while (game.moves.length && game.moves[game.moves.length - 1].by === 'tables') game.moves.pop(); }
     delete game.result; game.version++; saveGame(game);
     return send(res, 200, gameJson(game));
   }
   if (u.pathname === '/game/move') {
-    if (!game) newGame('tables');
+    if (!game) newGame({ wolf: 'browser', lamb: 'browser' });
     const from = +u.searchParams.get('from'), to = +u.searchParams.get('to');
     const s = gameState(game);
     const legalMove = E.legalMoves(s).find(m => m.from === from && m.to === to);
     if (!legalMove) return send(res, 400, { error: 'illegal move', state: gameJson(game) });
-    const err = applyRecorded(game, legalMove, u.searchParams.get('by') || (s.side === E.WOLF ? 'wolf-player' : 'lamb-player'));
+    const err = applyRecorded(game, legalMove, u.searchParams.get('by') || playerOf(game, s.side));
     if (err) return send(res, 400, { error: err });
-    if (game.lambBy === 'tables') tablesReply(game);
+    autoReply(game);
     saveGame(game);
     return send(res, 200, gameJson(game));
   }
