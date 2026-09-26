@@ -122,6 +122,16 @@
   details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
   details ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; }
   .kbd { font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+  #setupPanel { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  #setupPanel.on { display: block; }
+  #setupPanel .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+  #setupPanel label { color: var(--muted); font-size: 13px; }
+  #setupPanel input[type=number] { width: 64px; font: inherit; padding: 5px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--ink); }
+  #setupMsg { font-size: 13px; color: var(--muted); }
+  #setupMsg.bad { color: #d9534f; }
+  svg#board.setup .piece { cursor: grab; }
+  svg#board.setup .cell-hit { cursor: pointer; }
+  .piece.dragging { opacity: .75; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -143,6 +153,24 @@
         <button id="aimove" title="Let the engine play one move for the side to move">AI move</button>
         <button id="undo" title="Take back the last move">Undo</button>
         <button id="reset" class="primary">New game</button>
+        <button id="setup" title="Edit the position: click squares, drag pieces">Set up</button>
+      </div>
+      <div id="setupPanel">
+        <div class="row">
+          <label for="setupSide">Side to move</label>
+          <select id="setupSide"><option value="1">Wolf</option><option value="2">Lamb</option></select>
+          <label for="setupClock">turns since capture</label>
+          <input type="number" id="setupClock" min="0" max="99" value="0">
+        </div>
+        <div class="row">
+          <button id="setupClear">Clear board</button>
+          <button id="setupStart">Standard start</button>
+          <button id="setupMirror">Current position</button>
+          <span class="spacer"></span>
+          <button id="setupCancel">Cancel</button>
+          <button id="setupDone" class="primary">Done</button>
+        </div>
+        <div id="setupMsg">Click a square to cycle empty → lamb → wolf. Drag a piece to move it; drop it off the board to remove it.</div>
       </div>
       <div class="moves" id="moves"></div>
       <div class="nav" style="margin-top:8px">
@@ -220,7 +248,7 @@
           <option value="99">all</option>
         </select>
       </div>
-      <div class="hint">Click a piece then a square, or click a candidate badge to play it. Hover a candidate to see its line. <span class="kbd">&larr;</span> <span class="kbd">&rarr;</span> step through moves. Positive eval favours the Wolf side. Start <span class="kbd">node solver/server.js</span> and the page switches to the solved tables: every value shown is the exact game result (W/D/L badges with the number of plies until the game ends with best play; \u2265 marks the rare cases where the 100-turn rule forces a longer win than the shortest line), <span class="kbd">??</span> marks a move that changed the exact result, and the engine is only used to break ties.</div>
+      <div class="hint">Set up lets you edit the position: click squares to cycle empty → lamb → wolf, drag pieces, then press Done. Click a piece then a square, or click a candidate badge to play it. Hover a candidate to see its line. <span class="kbd">&larr;</span> <span class="kbd">&rarr;</span> step through moves. Positive eval favours the Wolf side. Start <span class="kbd">node solver/server.js</span> and the page switches to the solved tables: every value shown is the exact game result (W/D/L badges with the number of plies until the game ends with best play; \u2265 marks the rare cases where the 100-turn rule forces a longer win than the shortest line), <span class="kbd">??</span> marks a move that changed the exact result, and the engine is only used to break ties.</div>
     </div>
     <div class="panel">
       <details>
@@ -492,6 +520,7 @@
     analysis = null; hoverMove = null;
     stopReview();
     render();
+    if (setup) return;
     const s = cur();
     if (E.result(s)) return;
     ensureOracle(cursor);
@@ -581,6 +610,71 @@
     schedule();
   }
 
+  // ---- position setup ----------------------------------------------------
+  let setup = null;                           // { board: Array(25) } while editing, else null
+  let drag = null;                            // { from, g, dx, dy } while dragging a piece in setup mode
+  let lastDrop = 0;                           // time of the last drop, to swallow the click that follows it
+  function enterSetup(fromState) {
+    clearTimeout(aiTimer); Engine.abort(); stopReview(); analysis = null; hoverMove = null; selected = null;
+    const s = fromState || cur();
+    setup = { board: s.board.slice() };
+    $('setupSide').value = String(s.side);
+    $('setupClock').value = String(s.turnsSinceCapture);
+    $('setupPanel').classList.add('on');
+    render();
+  }
+  function leaveSetup() { setup = null; drag = null; $('setupPanel').classList.remove('on'); }
+  function setupCounts() {
+    let w = 0, l = 0; for (const v of setup.board) { if (v === E.WOLF) w++; else if (v === E.LAMB) l++; }
+    return { w, l };
+  }
+  function setupProblem() {
+    const { w, l } = setupCounts();
+    if (w !== 3) return 'need exactly 3 wolves (have ' + w + ')';
+    if (l < E.MIN_LAMBS) return 'need at least ' + E.MIN_LAMBS + ' lambs (have ' + l + ')';
+    if (l > 15) return 'at most 15 lambs (have ' + l + ')';
+    return null;
+  }
+  function renderSetupMsg() {
+    const p = setupProblem(), { w, l } = setupCounts();
+    const m = $('setupMsg');
+    m.className = p ? 'bad' : '';
+    m.textContent = (p ? p + '. ' : w + ' wolves, ' + l + ' lambs. ') + 'Click a square to cycle empty → lamb → wolf; drag a piece to move it, drop it off the board to remove it.';
+  }
+  function setupCycle(i) {
+    const v = setup.board[i];
+    setup.board[i] = v === E.EMPTY ? E.LAMB : v === E.LAMB ? E.WOLF : E.EMPTY;
+    render();
+  }
+  function svgPoint(ev) {
+    const pt = boardEl.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    return pt.matrixTransform(boardEl.getScreenCTM().inverse());
+  }
+  function cellAt(ev) {
+    const p = svgPoint(ev);
+    const c = Math.floor((p.x - M) / CELL), r = Math.floor((p.y - M) / CELL);
+    return (r >= 0 && r < 5 && c >= 0 && c < 5) ? r * 5 + c : -1;
+  }
+  function finishSetup() {
+    const p = setupProblem();
+    if (p) { renderSetupMsg(); return; }
+    const { l } = setupCounts();
+    const s = E.initialState();
+    s.board = setup.board.slice(); s.lambs = l; s.side = +$('setupSide').value;
+    s.turnsSinceCapture = Math.max(0, Math.min(99, +$('setupClock').value || 0));
+    s.moves = []; s.repetitions = {}; s.repetitions[E.positionKey(s)] = 1;
+    leaveSetup();
+    history = [s]; evals = [null]; oracle = [null]; cursor = 0; selected = null;
+    terminalEval(0);
+    schedule();
+  }
+  $('setup').addEventListener('click', () => { if (setup) leaveSetup(); else enterSetup(); render(); });
+  $('setupCancel').addEventListener('click', () => { leaveSetup(); schedule(); });
+  $('setupDone').addEventListener('click', finishSetup);
+  $('setupClear').addEventListener('click', () => { setup.board = new Array(25).fill(E.EMPTY); render(); });
+  $('setupStart').addEventListener('click', () => { setup.board = E.initialState().board.slice(); $('setupSide').value = '1'; $('setupClock').value = '0'; render(); });
+  $('setupMirror').addEventListener('click', () => { const s = cur(); setup.board = s.board.slice(); $('setupSide').value = String(s.side); $('setupClock').value = String(s.turnsSinceCapture); render(); });
+
   // ---- board -------------------------------------------------------------
   const boardEl = $('board');
   const M = 30, CELL = 80;
@@ -609,7 +703,60 @@
     return g;
   }
 
+  function renderSetupBoard() {
+    boardEl.innerHTML = '';
+    boardEl.classList.add('setup');
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+      const i = r * 5 + c;
+      const cell = el('rect', { class: 'cell-hit', x: M + c * CELL, y: M + r * CELL, width: CELL, height: CELL, fill: 'transparent' }, boardEl);
+      cell.addEventListener('click', () => { if (!drag && Date.now() - lastDrop > 300) setupCycle(i); });
+    }
+    for (let k = 0; k <= 5; k++) {
+      el('line', { class: 'grid-line', x1: M, y1: M + k * CELL, x2: M + 5 * CELL, y2: M + k * CELL }, boardEl);
+      el('line', { class: 'grid-line', x1: M + k * CELL, y1: M, x2: M + k * CELL, y2: M + 5 * CELL }, boardEl);
+    }
+    for (let k = 0; k < 5; k++) {
+      text(M + k * CELL + CELL / 2, M / 2, String(k + 1), 'coord', boardEl);
+      text(M / 2, M + k * CELL + CELL / 2, String(k + 1), 'coord', boardEl);
+    }
+    for (let i = 0; i < 25; i++) {
+      const v = setup.board[i];
+      if (v === E.EMPTY) continue;
+      const g = el('g', { class: 'piece ' + (v === E.WOLF ? 'wolf' : 'lamb') }, boardEl);
+      el('circle', { class: 'body', cx: cx(i), cy: cy(i), r: 30 }, g);
+      text(cx(i), cy(i) + 2, v === E.WOLF ? '\u{1F43A}' : '\u{1F411}', 'glyph', g);
+      g.addEventListener('pointerdown', ev => {
+        ev.preventDefault(); ev.stopPropagation();
+        const p = svgPoint(ev);
+        drag = { from: i, g, dx: p.x - cx(i), dy: p.y - cy(i), moved: false };
+        g.classList.add('dragging');
+        boardEl.setPointerCapture(ev.pointerId);
+      });
+    }
+    renderSetupMsg();
+  }
+  boardEl.addEventListener('pointermove', ev => {
+    if (!drag) return;
+    const p = svgPoint(ev);
+    drag.moved = true;
+    drag.g.setAttribute('transform', 'translate(' + (p.x - drag.dx - cx(drag.from)) + ' ' + (p.y - drag.dy - cy(drag.from)) + ')');
+  });
+  boardEl.addEventListener('pointerup', ev => {
+    if (!drag) return;
+    const d = drag; drag = null; lastDrop = Date.now();
+    try { boardEl.releasePointerCapture(ev.pointerId); } catch (e) {}
+    if (!d.moved) { setupCycle(d.from); return; }       // a click: cycle the piece
+    const to = cellAt(ev);
+    const b = setup.board;
+    if (to < 0) b[d.from] = E.EMPTY;                     // dropped off the board: remove
+    else if (to !== d.from) { const t = b[to]; b[to] = b[d.from]; b[d.from] = t; }   // move, swapping if occupied
+    render();
+  });
+  boardEl.addEventListener('pointercancel', () => { drag = null; render(); });
+
   function renderBoard() {
+    if (setup) { renderSetupBoard(); return; }
+    boardEl.classList.remove('setup');
     const s = cur();
     boardEl.innerHTML = '';
     const res = E.result(s);
@@ -729,6 +876,7 @@
   }
 
   function onCellClick(i) {
+    if (setup) return;
     const s = cur();
     if (E.result(s) || aiControls(s.side)) return;
     const legal = E.legalMoves(s);
@@ -743,7 +891,10 @@
   // ---- side panel --------------------------------------------------------
   function renderStatus() {
     const s = cur(), res = E.result(s);
-    if (res) {
+    if (setup) {
+      $('status').textContent = 'Setting up a position';
+      $('reason').textContent = 'press Done to start from it';
+    } else if (res) {
       $('status').textContent = res.winner === null ? 'Draw' : E.sideName(res.winner) + ' side wins';
       $('reason').textContent = res.reason;
     } else {
@@ -782,6 +933,7 @@
   function renderCandidates() {
     const box = $('candBox'), s = cur();
     box.innerHTML = '';
+    if (setup) { box.innerHTML = '<div class="empty">Set up the position, choose the side to move, then press Done.</div>'; return; }
     if (E.result(s)) { box.innerHTML = '<div class="empty">Game over.</div>'; return; }
     const ox = oracle[cursor];
     if (exactMode()) {
@@ -945,7 +1097,7 @@
     while (history.length > 1 && $('mode').value !== 'aa' && $('mode').value !== 'hh' && aiControls(history[history.length - 1].side)) { history.pop(); evals.pop(); oracle.pop(); }
     cursor = history.length - 1; selected = null; schedule();
   });
-  $('reset').addEventListener('click', () => { history = [E.initialState()]; evals = [null]; oracle = [null]; cursor = 0; selected = null; schedule(); });
+  $('reset').addEventListener('click', () => { leaveSetup(); history = [E.initialState()]; evals = [null]; oracle = [null]; cursor = 0; selected = null; schedule(); });
   $('aimove').addEventListener('click', () => {
     if (E.result(cur())) return;
     if (!atEnd()) { history = history.slice(0, cursor + 1); evals = evals.slice(0, cursor + 1); oracle = oracle.slice(0, cursor + 1); }
@@ -959,7 +1111,7 @@
   $('topN').addEventListener('change', render);
 
   document.addEventListener('keydown', ev => {
-    if (ev.target.tagName === 'SELECT' || ev.target.tagName === 'INPUT') return;
+    if (ev.target.tagName === 'SELECT' || ev.target.tagName === 'INPUT' || setup) return;
     if (ev.key === 'ArrowLeft') { goTo(cursor - 1); ev.preventDefault(); }
     else if (ev.key === 'ArrowRight') { goTo(cursor + 1); ev.preventDefault(); }
     else if (ev.key === 'Home') { goTo(0); ev.preventDefault(); }
@@ -984,6 +1136,7 @@
       if (!E.isLegal(s, mv)) { alert('Illegal move in record: ' + E.describeMove(mv) + ' at ply ' + h.length); return; }
       s = E.applyMove(s, mv); h.push(s);
     }
+    leaveSetup();
     history = h; evals = h.map(() => null); oracle = h.map(() => null); cursor = history.length - 1; selected = null;
     terminalEval(cursor);
     schedule();
