@@ -1,0 +1,8 @@
+opponent plays every legal move; cap 2000000 positions per rule
+
+WOLF rule "hold gatekeeper (1,2),(2,5),(3,3)": 1067289 decisions over 2000000 positions (capped), 139412 value-losing moves (13.06%)  draw->loss 35861, win->draw 102134, win->loss 1417
+  example (value draw, Wolf to move): rule plays (3,3) x (3,5); correct: (1,2) x (3,2)
+  example (value draw, Wolf to move): rule plays (1,4) x (3,4); correct: (1,2) x (3,2), (1,2) -> (2,2), (1,4) -> (2,4)
+vs random lamb: 60 games -> wolf 60 lamb 0 draw 0; wolf-rule decisions 1039, value-losing 97
+vs engine lamb (depth 6): 60 games -> wolf 0 lamb 0 draw 60; wolf-rule decisions 1440, value-losing 300
+vs table-perfect lamb (random value-preserving move): 60 games -> wolf 0 lamb 3 draw 57; wolf-rule decisions 2073, value-losing 49

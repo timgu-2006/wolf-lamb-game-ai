@@ -67,6 +67,8 @@ function formationRule(targets) {
   };
 }
 const FORMATIONS = {
+  'hold gatekeeper (1,2),(2,5),(3,3)': [cellOf(1, 2), cellOf(2, 5), cellOf(3, 3)],
+  'hold gatekeeper (1,2),(2,4),(3,3)': [cellOf(1, 2), cellOf(2, 4), cellOf(3, 3)],
   'hold (3,3),(2,2),(1,4)': [cellOf(3, 3), cellOf(2, 2), cellOf(1, 4)],
   'hold (3,3),(2,2),(2,4)': [cellOf(3, 3), cellOf(2, 2), cellOf(2, 4)],
   'hold diagonal (2,2),(3,3),(4,4)': [cellOf(2, 2), cellOf(3, 3), cellOf(4, 4)],
