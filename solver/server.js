@@ -36,6 +36,7 @@ const fs = require('fs');
 const B = require(path.join(__dirname, '..', 'bitboard.js'));
 const E = require(path.join(__dirname, '..', 'engine.js'));
 const TB = require(path.join(__dirname, 'tables.js'));
+const TAC = require(path.join(__dirname, 'tactics.js'));
 
 const port = +(process.argv[2] || 8787);
 if (!TB.available()) {
@@ -88,7 +89,7 @@ function gameJson(g) {
 }
 
 const DEPTH = 3;   // opponent moves considered by the blunder probability
-function moveObj(o) { return { from: B.moveFrom(o.move), to: B.moveTo(o.move), capture: !!o.capture, winner: o.winner, t: o.t, d: o.d, dExact: o.dExact, replies: o.replies, blunder: o.blunder, blunderUniform: o.blunderUniform }; }
+function moveObj(o, p) { return { from: B.moveFrom(o.move), to: B.moveTo(o.move), capture: !!o.capture, winner: o.winner, t: o.t, d: o.d, dExact: o.dExact, replies: o.replies, blunder: o.blunder, blunderUniform: o.blunderUniform, tactic: (p && p.side === B.WOLF && TAC.discoveredDouble(p, o.move)) ? 'discovered double attack' : undefined }; }
 
 /* best play from p for up to n plies: winner fastest, loser slowest, draws set the biggest trap (and avoid repeating) */
 function bestLine(p, n) {
@@ -146,7 +147,7 @@ const server = http.createServer((req, res) => {
     const p = { wolves: w, lambs: l, side, clock };
     if (u.pathname === '/eval') {
       const value = TB.value(p, clock);
-      const moves = TB.bestMoves(p, clock, { depth: DEPTH }).map(moveObj);
+      const moves = TB.bestMoves(p, clock, { depth: DEPTH }).map(o => moveObj(o, p));
       return send(res, 200, { value, moves });
     }
     const from = +u.searchParams.get('from'), to = +u.searchParams.get('to'), n = Math.min(+(u.searchParams.get('n') || 8), 40);

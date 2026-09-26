@@ -876,7 +876,7 @@
         arrow(g, m.from, m.to, '', 30).querySelectorAll('.arrow').forEach(p => p.setAttribute('stroke', color));
         const bx = cx(m.from) + (cx(m.to) - cx(m.from)) * 0.68, by = cy(m.from) + (cy(m.to) - cy(m.from)) * 0.68;
         el('circle', { class: 'badge', cx: bx, cy: by, r: 21, fill: color }, g);
-        text(bx, by - 5, o.winner === 3 ? 'D' : o.winner === s.side ? 'W' : 'L', 'wr', g);
+        text(bx, by - 5, (o.tactic ? '\u26A1' : '') + (o.winner === 3 ? 'D' : o.winner === s.side ? 'W' : 'L'), 'wr', g);
         text(bx, by + 10, o.winner === 3 ? '' : (o.dExact === false ? '\u2265' : '') + String(moveLen(o)), 'sc', g);
         g.addEventListener('mouseenter', () => { hoverMove = id; renderBoard(); });
         g.addEventListener('mouseleave', () => { hoverMove = null; renderBoard(); });
@@ -1010,7 +1010,7 @@
         const line = exactLineFor(cursor, em);
         const tr = document.createElement('tr');
         tr.innerHTML = '<td>' + (k + 1) + '</td><td><span class="sw" style="background:' + exactColor(o.winner, s.side) + '"></span>' + E.describeMove(em) + '</td>' +
-          '<td class="' + exactClass(o.winner, s.side) + '">' + exactMoveText(o, s.side) + '</td><td>' + repliesText(o) + '</td><td class="pvcell">' + (line ? exactLineText(E.applyMove(s, em), line) : '…') + '</td>';
+          '<td class="' + exactClass(o.winner, s.side) + '">' + exactMoveText(o, s.side) + (o.tactic ? ' <span title="' + o.tactic + '">\u26A1</span>' : '') + '</td><td>' + repliesText(o) + '</td><td class="pvcell">' + (line ? exactLineText(E.applyMove(s, em), line) : '…') + '</td>';
         tr.addEventListener('mouseenter', () => { hoverMove = id; renderBoard(); });
         tr.addEventListener('mouseleave', () => { hoverMove = null; renderBoard(); });
         tr.addEventListener('click', () => { hoverMove = null; if (shared) { if (s.side === E.WOLF && atEnd()) sharedMove(em); } else if (!aiControls(s.side) || !atEnd()) playMove(em); });
