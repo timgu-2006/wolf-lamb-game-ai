@@ -544,7 +544,9 @@
     const g = await sharedApi('/game');
     if (!g) { $('sharedState').textContent = 'server not reachable'; return; }
     if (!g.id) { $('sharedState').textContent = 'no game yet: press New shared game'; return; }
-    if (g.version !== sharedVersion || g.id !== sharedId) {
+    const sig = g.moves.map(m => m.from + '-' + m.to).join(',');
+    const localSig = history[history.length - 1].moves.map(m => m.from + '-' + m.to).join(',');
+    if (g.version !== sharedVersion || g.id !== sharedId || sig !== localSig) {
       sharedVersion = g.version; sharedId = g.id;
       rebuildFromMoves(g.moves);
       schedule();
@@ -652,6 +654,7 @@
   function playMove(em) {
     const s = cur();
     if (!E.isLegal(s, em)) return;
+    if (shared) { if (s.side === E.WOLF && atEnd()) { selected = null; sharedMove(em); } return; }
     if (!atEnd()) { history = history.slice(0, cursor + 1); evals = evals.slice(0, cursor + 1); oracle = oracle.slice(0, cursor + 1); }
     history.push(E.applyMove(s, em)); evals.push(null); oracle.push(null);
     cursor = history.length - 1;
