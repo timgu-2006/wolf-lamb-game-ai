@@ -1,0 +1,117 @@
+layer 15: 319 wolf placements (orbits). 0 placements are never lost for the wolves in this layer (wolf fortresses).
+
+placements with the highest draw share:
+  draw 0.45%  lamb wins 99.55%  wolf wins 0.00%
+    . . . . .
+    . . W W .
+    . W . . .
+    . . . . .
+    . . . . .
+
+  draw 0.28%  lamb wins 99.72%  wolf wins 0.00%
+    . . W W .
+    . W . . .
+    . . . . .
+    . . . . .
+    . . . . .
+
+  draw 0.27%  lamb wins 99.73%  wolf wins 0.00%
+    . W . . .
+    . W . . .
+    . . W . .
+    . . . . .
+    . . . . .
+
+  draw 0.27%  lamb wins 99.73%  wolf wins 0.00%
+    . . . . .
+    . W W . .
+    . . W . .
+    . . . . .
+    . . . . .
+
+  draw 0.27%  lamb wins 99.73%  wolf wins 0.00%
+    . . . . .
+    . W W . .
+    . W . . .
+    . . . . .
+    . . . . .
+
+#####
+layer 14: 319 wolf placements (orbits). 0 placements are never lost for the wolves in this layer (wolf fortresses).
+
+placements with the highest draw share:
+  draw 5.63%  lamb wins 94.37%  wolf wins 0.00%
+    . . . . .
+    . . W W .
+    . W . . .
+    . . . . .
+    . . . . .
+
+  draw 4.72%  lamb wins 95.28%  wolf wins 0.00%
+    . . . . .
+    . . . W .
+    . W W . .
+    . . . . .
+    . . . . .
+
+  draw 4.62%  lamb wins 95.38%  wolf wins 0.00%
+    . . . . .
+    . W W . .
+    . W . . .
+    . . . . .
+    . . . . .
+
+  draw 4.48%  lamb wins 95.52%  wolf wins 0.00%
+    . . . . .
+    . . W . .
+    . . . W .
+    . W . . .
+    . . . . .
+
+  draw 4.37%  lamb wins 95.63%  wolf wins 0.00%
+    . . . . .
+    . . W . .
+    . W . W .
+    . . . . .
+    . . . . .
+
+#####
+layer 13: 319 wolf placements (orbits). 0 placements are never lost for the wolves in this layer (wolf fortresses).
+
+placements with the highest draw share:
+  draw 19.31%  lamb wins 80.66%  wolf wins 0.03%
+    . . . . .
+    . . W . .
+    . . . W .
+    . W . . .
+    . . . . .
+
+  draw 17.53%  lamb wins 82.45%  wolf wins 0.02%
+    . . . . .
+    . . W W .
+    . W . . .
+    . . . . .
+    . . . . .
+
+  draw 17.00%  lamb wins 82.98%  wolf wins 0.01%
+    . . . . .
+    . . . W .
+    . W W . .
+    . . . . .
+    . . . . .
+
+  draw 16.16%  lamb wins 83.81%  wolf wins 0.03%
+    . . . . .
+    . W W . .
+    . W . . .
+    . . . . .
+    . . . . .
+
+  draw 16.14%  lamb wins 83.84%  wolf wins 0.02%
+    . . . . .
+    . W W . .
+    . . W . .
+    . . . . .
+    . . . . .
+
+#####

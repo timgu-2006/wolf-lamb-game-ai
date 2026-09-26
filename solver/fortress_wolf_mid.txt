@@ -1,0 +1,160 @@
+layer 7: 319 wolf placements (orbits). 134 placements are never lost for the wolves in this layer (wolf fortresses).
+
+  wolf fortress: 341088 states, draws 194358, wolf wins 146730
+    W . . . .
+    . . . . .
+    . . . . W
+    W . . . .
+    . . . . .
+
+
+  wolf fortress: 341088 states, draws 188103, wolf wins 152985
+    W . . . .
+    . . . . W
+    . . . . .
+    W . . . .
+    . . . . .
+
+
+  wolf fortress: 341088 states, draws 185854, wolf wins 155234
+    . W . . .
+    . . . . .
+    . . . . W
+    . . . . .
+    W . . . .
+
+
+  wolf fortress: 341088 states, draws 174281, wolf wins 166807
+    . . . . W
+    . . . . .
+    W . W . .
+    . . . . .
+    . . . . .
+
+
+placements with the highest draw share:
+  draw 86.91%  lamb wins 2.80%  wolf wins 10.28%
+    W . . . W
+    . . . . .
+    . . . . .
+    . . . . .
+    W . . . .
+
+  draw 78.42%  lamb wins 1.63%  wolf wins 19.95%
+    W . . . W
+    . . . . .
+    W . . . .
+    . . . . .
+    . . . . .
+
+  draw 76.64%  lamb wins 0.19%  wolf wins 23.17%
+    W . . . .
+    . . . . .
+    . . . . W
+    . . . . .
+    W . . . .
+
+  draw 76.39%  lamb wins 2.79%  wolf wins 20.82%
+    . . W . W
+    . . . . .
+    . . . . .
+    . . . . .
+    W . . . .
+
+#####
+layer 8: 319 wolf placements (orbits). 10 placements are never lost for the wolves in this layer (wolf fortresses).
+
+  wolf fortress: 639540 states, draws 197144, wolf wins 442396
+    . W . . .
+    . . . . .
+    . . . W .
+    . W . . .
+    . . . . .
+
+
+  wolf fortress: 639540 states, draws 184600, wolf wins 454940
+    . . . . .
+    . . W . .
+    . . . W .
+    W . . . .
+    . . . . .
+
+
+  wolf fortress: 639540 states, draws 170474, wolf wins 469066
+    . . . . .
+    . . . W .
+    . . W . .
+    W . . . .
+    . . . . .
+
+
+  wolf fortress: 639540 states, draws 170243, wolf wins 469297
+    . . . . .
+    . . W . .
+    W . . W .
+    . . . . .
+    . . . . .
+
+
+placements with the highest draw share:
+  draw 88.92%  lamb wins 2.06%  wolf wins 9.02%
+    . . . . W
+    . . . . .
+    . . W . .
+    . . . . .
+    W . . . .
+
+  draw 86.37%  lamb wins 2.69%  wolf wins 10.94%
+    W . . . W
+    . . . . .
+    . . W . .
+    . . . . .
+    . . . . .
+
+  draw 86.03%  lamb wins 8.84%  wolf wins 5.13%
+    W . . . .
+    . . . . .
+    . . . . W
+    . . . . .
+    W . . . .
+
+  draw 85.63%  lamb wins 2.81%  wolf wins 11.56%
+    . . W . .
+    . . . . .
+    . . . . W
+    . . . . .
+    W . . . .
+
+#####
+layer 9: 319 wolf placements (orbits). 0 placements are never lost for the wolves in this layer (wolf fortresses).
+
+placements with the highest draw share:
+  draw 84.62%  lamb wins 5.61%  wolf wins 9.77%
+    . . . . .
+    . . . . .
+    W . W . W
+    . . . . .
+    . . . . .
+
+  draw 82.66%  lamb wins 13.04%  wolf wins 4.30%
+    . . . . W
+    . . . . .
+    W . W . .
+    . . . . .
+    . . . . .
+
+  draw 82.21%  lamb wins 11.71%  wolf wins 6.08%
+    . . W . .
+    . . . . .
+    W . . . W
+    . . . . .
+    . . . . .
+
+  draw 81.89%  lamb wins 5.42%  wolf wins 12.69%
+    . . . . .
+    W . . . W
+    . . . . .
+    . . W . .
+    . . . . .
+
+#####

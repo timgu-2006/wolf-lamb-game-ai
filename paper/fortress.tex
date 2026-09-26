@@ -1,0 +1,239 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{fancyvrb}
+\usepackage[hidelinks]{hyperref}
+\DefineVerbatimEnvironment{board}{Verbatim}{fontsize=\normalsize,xleftmargin=2em}
+
+\title{Fortresses in Wolf and Lamb}
+\author{}
+\date{26 September 2026}
+
+\begin{document}
+\maketitle
+
+\section*{Summary}
+
+Both sides have a way of never losing, but they are of different kinds.
+
+\begin{itemize}
+\item \textbf{The lambs have true fortresses: shapes that cannot be broken whatever
+the wolves do.} None exists with 4 or 5 lambs; with 6 lambs there are exactly four
+(up to symmetry), with 7 lambs 141, with 8 lambs 1{,}179. They all follow one
+rule, the \emph{distance-two rule}: a lamb can only be captured from a square two
+steps away in its row or column, so a lamb whose distance-two squares are all
+either off the board or occupied by lambs is untouchable. The catch is that
+lambs must move every turn, so a fortress also needs spare moves that do not open
+a hole. The 4-lamb square that satisfies the rule perfectly is nevertheless
+always lost, by zugzwang.
+\item \textbf{The wolves have no fortress shape.} Every wolf placement can be
+trapped for some lamb configuration. What the wolves have instead is a
+\emph{principle}: stay apart and off the edges. With 9 lambs left, wolves that
+are not adjacent to each other and not on the edge lose in 0.9\,\% of positions;
+wolves huddled on the edge lose in half of them. The reason is counting: a corner
+wolf is trapped by 2 lambs, an edge wolf by 3, a central wolf by 4, and three
+separate nets cost more lambs than the flock can spare.
+\item In the drawn starting line the two meet: the wolves eat down to a few lambs
+that have settled into a distance-two shape, the wolves are spread out, and
+nobody can make progress.
+\end{itemize}
+
+All statements below are read off the exact solution tables: for a shape, ``never
+lost'' means that over every placement of the three wolves and both sides to
+move, no position is a win for the other side.
+
+\section*{The distance-two rule}
+
+A wolf captures by jumping over one empty square onto a lamb. So a lamb on square
+$s$ can be captured along a line only if the neighbour of $s$ on that line is
+empty and the square two steps away on the same side is on the board and reachable
+by a wolf. This gives:
+
+\begin{quote}
+\textbf{A lamb is immune along a line if, on each side, the square two steps away
+is off the board or holds a lamb, or the adjacent square is occupied.}
+\end{quote}
+
+The second condition is fragile (the occupying piece may move), the first is
+stable as long as the protecting lamb stays. Squares two steps apart in a row or
+column have the same parity of row and of column, so the board splits into four
+\emph{lattices}: the 9 squares with both coordinates odd, the 4 squares with both
+even, and two lattices of 6 with mixed parity. A set of lambs that fills a whole
+lattice is immune while it stands still:
+
+\begin{board}
+   even-even (4)        odd-even (6)         even-odd (6)
+   . . . . .            . L . L .            . . . . .
+   . L . L .            . . . . .            L . L . L
+   . . . . .            . L . L .            . . . . .
+   . L . L .            . . . . .            L . L . L
+   . . . . .            . L . L .            . . . . .
+\end{board}
+
+\section*{Why the 4-lamb square is not a fortress}
+
+The four-square lattice is perfectly immune, yet the tables show it is lost in
+every position where the wolves are close. Lambs may not pass. Whatever lamb
+moves, it leaves its lattice square, loses the protection of its distance-two
+partners, and the lattice has no spare lamb to fill the gap; the wolves then win
+in a few moves. Example (wolf to move, wolves win in every line; also lost with
+the lambs to move, all 16 lamb moves losing):
+
+\begin{board}
+   W . . . .
+   . L . L .
+   . . W . .
+   . L . L .
+   . . . . W
+\end{board}
+
+With 4 lambs no shape at all is a fortress: one capture ends the game, and the
+best shape is still lost in 81\,\% of positions. With 5 lambs the best shape is
+lost in 36\,\%.
+
+\section*{The 6-lamb fortresses}
+
+Six lambs is the smallest number that admits shapes which are never lost. There
+are exactly four up to symmetry:
+
+\begin{board}
+   A               B               C               D
+   . L . L .       . L . L .       . . . . .       . . . . .
+   . L . L .       . . . . .       L . L . L       . L . L .
+   . . . . .       . L . L .       . . . . .       . L . L .
+   . L . L .       . L . L .       L . L . L       . L . L .
+   . . . . .       . . . . .       . . . . .       . . . . .
+\end{board}
+
+C is the full even-odd lattice (6 lambs) and is drawn in all 524 positions. A, B
+and D are \emph{double rails}: two columns one square in from the edges, three
+lambs each, with two of the three lambs stacked. Each rail protects the other at
+distance two horizontally; inside a rail the stacked pair protects itself by
+occupancy and the third lamb by distance two. A and B are drawn in 1{,}012 of
+1{,}014 positions and won by the lambs in the other 2; nothing is ever lost.
+
+What makes these six-lamb shapes work where the square failed is \emph{tempo}.
+In shape A with the wolves probing as below, the lambs to move have 17 legal
+moves, 13 of which keep the draw:
+
+\begin{board}
+   . L . L .
+   . L . L .
+   W . W . .        Lamb to move: draw.
+   . L . L .        Drawing moves include (1,2)-(1,1), (1,4)-(1,3),
+   . . . W .        (2,2)-(2,1), (2,4)-(2,3), (4,2)-(4,1), (2,2)-(3,2), ...
+\end{board}
+
+A lamb steps sideways off its rail and back again; while it is away, its
+neighbours still cover the squares two steps from it, so the wolves gain nothing.
+The four losing moves are the ones that put a lamb two steps from a wolf with an
+empty square between them, such as (4,4)-(3,4) next to the wolf on (3,3) or
+(4,2)-(5,2) in line with the wolf on (5,4).
+
+Because the rule is local, the fortresses grow: with 7 lambs the extra lamb
+usually sits in a corner or on an edge square that the rails already protect, and
+with 8 lambs the most robust shapes put a full rail on the top edge:
+
+\begin{board}
+   7 lambs                     8 lambs
+   . . . L L                   L L L . L
+   . L . L .                   . L . L .
+   . . . . .                   . . . . .
+   . L . L .                   . L . L .
+   L . . . .                   . . . . .
+\end{board}
+
+Shapes that look just as tidy but break the rule are lost. The best five-lamb
+shape, a row of three with two supporters two rows below, is still lost in
+36\,\% of positions; the best four-lamb shapes in 81 to 87\,\%.
+
+\section*{The wolves: no shape, but a principle}
+
+For every placement of the three wolves, some lamb configurations trap them,
+even with only 7 lambs. So the wolves have no fortress in the strict sense. The
+tables do, however, show a strong pattern in \emph{which} placements survive.
+Over all positions with 9 lambs:
+
+\begin{center}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+adjacent wolf pairs & wolves on the edge & wolf wins & draws & lamb wins \\
+\midrule
+0 & 0 & 54.3\,\% & 44.8\,\% & 0.9\,\% \\
+0 & 1 & 36.5\,\% & 59.2\,\% & 4.3\,\% \\
+0 & 2 & 18.6\,\% & 68.1\,\% & 13.3\,\% \\
+0 & 3 & 7.7\,\% & 62.1\,\% & 30.2\,\% \\
+1 & 3 & 9.5\,\% & 50.6\,\% & 39.9\,\% \\
+2 & 3 & 12.8\,\% & 36.2\,\% & 50.9\,\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Two effects, both large. Every wolf on the edge costs the wolves about a third
+of their winning chances and multiplies their losing chances. And wolves that
+touch each other are easier to trap than wolves that stay apart: with all three
+on the edge, going from no adjacent pair to two adjacent pairs raises the lamb
+win rate from 30\,\% to 51\,\%. A huddle can be closed with one net; three
+separated wolves need three nets, and the flock cannot afford them. The safest
+placements in the middle game are spread as far apart as the board allows:
+
+\begin{board}
+   7 lambs, 87% draws     8 lambs, 89% draws     9 lambs, 85% draws
+   W . . . W              . . . . W              . . . . .
+   . . . . .              . . . . .              . . . . .
+   . . . . .              . . W . .              W . W . W
+   . . . . .              . . . . .              . . . . .
+   W . . . .              W . . . .              . . . . .
+\end{board}
+
+The count behind the principle: to immobilise a wolf the lambs must occupy all its
+empty neighbours \emph{and} keep the square beyond each neighbour from giving a
+jump. In a corner that takes 2 lambs, on an edge 3, in the open 4, and the
+lambs also need tempo moves of their own. With three wolves far apart the bill
+exceeds what 7 to 9 lambs can pay, and the game is a draw.
+
+\section*{How the two fortresses meet in the main line}
+
+From the start the only drawing wolf move is the central capture. The wolves
+then win material through double threats while the lambs give up lambs that
+cannot be saved and keep the ones that can. Best play by both sides reaches
+positions with a handful of lambs in a distance-two shape and three wolves spread
+across the board: the lambs are immune, the wolves are untrappable, and the
+100-turn rule ends the game. One such ending, reached with the tables playing
+both sides:
+
+\begin{board}
+   W . W . .
+   L . L . .
+   L . . L .        Wolf to move, draw. Every lamb is covered by
+   W . . . .        a partner or an edge; every wolf has room.
+   . . . . .
+\end{board}
+
+\section*{Practical advice}
+
+\begin{itemize}
+\item \textbf{Lambs:} think in distance two. A lamb is safe if the squares two
+away in its row and column are lambs or off the board. Build rails a square in
+from the edge, keep pairs stacked, and always keep a harmless waiting move in
+reserve; if every move would open a hole, the shape is a zugzwang, not a
+fortress. Never trade the last spare lamb: six is the minimum that can hold.
+\item \textbf{Wolves:} never let two wolves touch, keep at least one wolf in the
+centre, and stay off the edges unless a capture forces it. A wolf that is
+tempted to the edge by a free lamb has often walked into the only net the lambs
+can afford.
+\end{itemize}
+
+\section*{How this was computed}
+
+\texttt{solver/fortress.js lamb $k$} groups every position with $k$ lambs by the
+lamb shape (up to the eight symmetries of the board) and counts wolf wins, lamb
+wins and draws over all wolf placements and both sides to move; shapes with zero
+wolf wins are the fortresses. \texttt{solver/fortress.js wolf $k$} does the same
+by wolf placement, and \texttt{solver/wolfshape.js $k$} tabulates the value by
+the wolves' formation. The immunity of individual lambs was checked directly
+from the capture rule.
+
+\end{document}

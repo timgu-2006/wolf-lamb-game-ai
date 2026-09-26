@@ -1,0 +1,87 @@
+layer 8: 136080 lamb shapes (up to symmetry). 1179 shapes are never lost for the lambs whatever the wolves do (lamb fortresses).
+
+  fortress shape: 1360 states, draws 1355, lamb wins 5
+    L L L . L
+    . L . L .
+    . . . . .
+    . L . L .
+    . . . . .
+
+
+  fortress shape: 1360 states, draws 1354, lamb wins 6
+    L . . . L
+    . L . L L
+    . . . . .
+    . L . L .
+    L . . . .
+
+
+  fortress shape: 1360 states, draws 1347, lamb wins 13
+    L L . . L
+    . L . L .
+    . . . . .
+    . L . L .
+    L . . . .
+
+
+  fortress shape: 1360 states, draws 1346, lamb wins 14
+    L . . L L
+    . L . L .
+    . . . . .
+    . L . L .
+    L . . . .
+
+
+  fortress shape: 1360 states, draws 1343, lamb wins 17
+    L . . . L
+    . L . L .
+    . . . . L
+    . L . L .
+    L . . . .
+
+
+  fortress shape: 1360 states, draws 1342, lamb wins 18
+    . . L L L
+    . L . L .
+    . . . . .
+    . L . L .
+    L . . . .
+
+
+least breakable non-fortress shapes (share of states the wolves win):
+  wolf wins 0.07%  (1 of 1360)
+    . . . L .
+    . L . L L
+    . L . L .
+    . L L . .
+    . . . . .
+
+  wolf wins 0.07%  (1 of 1360)
+    . . . . L
+    . L . L L
+    . L . L .
+    . L L . .
+    . . . . .
+
+  wolf wins 0.07%  (1 of 1360)
+    . . . . .
+    L L . L L
+    . L . L .
+    . L L . .
+    . . . . .
+
+  wolf wins 0.07%  (1 of 1360)
+    . L L . .
+    . L L L .
+    . . . L .
+    . L L . .
+    . . . . .
+
+  wolf wins 0.07%  (1 of 1360)
+    . . . L .
+    . L L . .
+    . . L L L
+    . L L . .
+    . . . . .
+
+fortress shapes cover 1502780 of 183905340 states in the layer
