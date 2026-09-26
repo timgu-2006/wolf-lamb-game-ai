@@ -9,9 +9,11 @@
  *     transforms fix the wolf mask).
  *   - index = (orbit * C(22,k) + lambRank) * 2 + side, side 0 = wolf to move.
  */
-const path = require('path');
-const B = require(path.join(__dirname, '..', 'bitboard.js'));
-
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require(require('path').join(__dirname, '..', 'bitboard.js')));
+  else root.WolfLambIndexing = factory(root.Bitboard);
+})(typeof self !== 'undefined' ? self : this, function (B) {
+'use strict';
 const ALL = (1 << 25) - 1;
 
 // ---- symmetry --------------------------------------------------------------
@@ -73,4 +75,5 @@ function stateOf(k, idx) {
   return { wolves: orbitMask[o], lambs: expandLambs(o, unrankCompressed(r, k)), side };
 }
 
-module.exports = { ALL, xf, binom, rank3, nOrbits, orbitMask, orbitStab, orbitCells, rankLambs, expandLambs, unrankCompressed, isAlias, canonIndex, nextComb, layerSize, stateOf };
+return { ALL, xf, binom, rank3, nOrbits, orbitMask, orbitStab, orbitCells, rankLambs, expandLambs, unrankCompressed, isAlias, canonIndex, nextComb, layerSize, stateOf };
+});

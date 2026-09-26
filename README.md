@@ -35,3 +35,15 @@ solver/dist 15 12             # plies-to-end tables, about 30 minutes
 node solver/verify_dist.js
 node solver/server.js         # then open index.html for exact values
 ```
+
+## Online version (GitHub Pages)
+
+The page works without any server when it is served over HTTP together with the
+`tables/` directory: `solver/pack.js` packs the win/draw/loss values to 2 bits per
+entry (651 MB, files under 100 MB), and `web_oracle.js` reads single bytes from
+them with HTTP range requests. The online version shows exact win/draw/loss for
+the position and every move and lets the AI play perfectly; the plies-to-end
+numbers, trap probabilities and shared games need the local server.
+
+Deploy: push this repository (including `tables/`) to GitHub, then in the
+repository settings enable Pages from the `main` branch, root folder.

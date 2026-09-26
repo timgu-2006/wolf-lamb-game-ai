@@ -278,6 +278,8 @@
 <script src="engine.js"></script>
 <script src="bitboard.js"></script>
 <script src="ai.js"></script>
+<script src="solver/indexing.js"></script>
+<script src="web_oracle.js"></script>
 <script>
 (function () {
   'use strict';
@@ -374,11 +376,13 @@
     function keyOf(s) { return B.key(B.fromState(s)) + ':' + s.turnsSinceCapture; }
     function setState() {
       const e = $('oracleState');
-      e.textContent = connected ? 'exact tables: connected' : 'exact tables: not connected (run node solver/server.js)';
+      e.textContent = connected ? (mode === 'static' ? 'exact tables: online (win/draw/loss)' : 'exact tables: connected') : 'exact tables: not connected (run node solver/server.js)';
       e.className = connected ? 'on' : '';
     }
     async function check() {
       try { const r = await fetch(base + '/health', { cache: 'no-store' }); connected = r.ok; } catch (e) { connected = false; }
+      mode = connected ? 'server' : 'none';
+      if (!connected && await checkStatic()) { connected = true; mode = 'static'; }
       setState();
       return connected;
     }
@@ -387,6 +391,9 @@
       const k = keyOf(s);
       if (cache.has(k)) return cache.get(k);
       const p = B.fromState(s);
+      if (mode === 'static') {
+        try { const j = await staticOracle.evalPosition(p); cache.set(k, j); return j; } catch (e) { return null; }
+      }
       try {
         const r = await fetch(base + '/eval?w=' + p.wolves + '&l=' + p.lambs + '&side=' + p.side + '&clock=' + s.turnsSinceCapture, { cache: 'no-store' });
         if (!r.ok) return null;
@@ -395,9 +402,19 @@
         return j;
       } catch (e) { connected = false; setState(); return null; }
     }
+    // static fallback: 2-bit packed tables next to the page (see solver/pack.js), read with range requests
+    let staticOracle = null, mode = 'none';
+    async function checkStatic() {
+      if (location.protocol === 'file:') return false;
+      try {
+        const o = WolfLambOracle.create({ baseUrl: 'tables/' });
+        if (!(await o.ready())) return false;
+        staticOracle = o; return true;
+      } catch (e) { return false; }
+    }
     const lines = new Map();
     async function line(s, em) {
-      if (!connected) return null;
+      if (!connected || mode !== 'server') return null;
       const k = keyOf(s) + ':' + em.from + '-' + em.to;
       if (lines.has(k)) return lines.get(k);
       const p = B.fromState(s);
@@ -409,7 +426,7 @@
         return j;
       } catch (e) { return null; }
     }
-    return { check, query, line, cached: s => cache.get(keyOf(s)) || null, isConnected: () => connected };
+    return { check, query, line, cached: s => cache.get(keyOf(s)) || null, isConnected: () => connected, mode: () => mode };
   })();
   const exactMode = () => Oracle.isConnected();
   const exactWr = v => v.winner === E.WOLF ? 1 : v.winner === E.LAMB ? 0 : 0.5;   // for the graph/bar
@@ -442,15 +459,17 @@
     if (v.winner === 3) return 'draw';
     const side = v.winner === E.WOLF ? 'Wolf' : 'Lamb';
     if (typeof v.d === 'number') return side + ' wins in ' + (v.dExact === false ? '\u2265' : '') + v.d + ' plies';
-    return side + ' wins, next capture/trap in ' + v.t;
+    if (typeof v.t === 'number') return side + ' wins, next capture/trap in ' + v.t;
+    return side + ' wins';
   }
   function exactMoveText(o, mover) {
     if (o.winner === 3) return 'draw';
     const what = o.winner === mover ? 'win' : 'loss';
     if (typeof o.d === 'number') return what + ' in ' + (o.dExact === false ? '\u2265' : '') + o.d;
-    return what + ', next capture/trap in ' + o.t;
+    if (typeof o.t === 'number') return what + ', next capture/trap in ' + o.t;
+    return what;
   }
-  const moveLen = o => typeof o.d === 'number' ? o.d : o.t;
+  const moveLen = o => typeof o.d === 'number' ? o.d : (typeof o.t === 'number' ? o.t : 0);
   function exactOf(i, em) {                   // exact outcome of move em from history[i]
     const o = oracle[i]; if (!o) return null;
     return o.moves.find(x => x.from === em.from && x.to === em.to) || null;
@@ -571,7 +590,7 @@
     else $('sharedState').textContent = '';
     render();
   }
-  $('sharedOn').addEventListener('change', () => setShared($('sharedOn').checked));
+  $('sharedOn').addEventListener('change', () => { if (Oracle.mode() !== 'server') { $('sharedOn').checked = false; $('sharedState').textContent = 'shared games need the local server'; return; } setShared($('sharedOn').checked); });
   const newSharedQuery = () => '/game/new?wolf=' + $('sharedWolf').value + '&lamb=' + $('sharedLamb').value;
   $('sharedNew').addEventListener('click', async () => { if (!shared) { $('sharedOn').checked = true; setShared(true); } await sharedApi(newSharedQuery(), 'POST'); sharedVersion = -1; syncShared(); });
 
@@ -882,7 +901,7 @@
         const bx = cx(m.from) + (cx(m.to) - cx(m.from)) * 0.68, by = cy(m.from) + (cy(m.to) - cy(m.from)) * 0.68;
         el('circle', { class: 'badge', cx: bx, cy: by, r: 21, fill: color }, g);
         text(bx, by - 5, (o.tactic ? '\u26A1' : '') + (o.winner === 3 ? 'D' : o.winner === s.side ? 'W' : 'L'), 'wr', g);
-        text(bx, by + 10, o.winner === 3 ? '' : (o.dExact === false ? '\u2265' : '') + String(moveLen(o)), 'sc', g);
+        text(bx, by + 10, (o.winner === 3 || (typeof o.d !== 'number' && typeof o.t !== 'number')) ? '' : (o.dExact === false ? '\u2265' : '') + String(moveLen(o)), 'sc', g);
         g.addEventListener('mouseenter', () => { hoverMove = id; renderBoard(); });
         g.addEventListener('mouseleave', () => { hoverMove = null; renderBoard(); });
         g.addEventListener('click', ev => { ev.stopPropagation(); hoverMove = null; if (shared) { if (browserPlays(s.side) && atEnd()) sharedMove(m); } else if (!aiControls(s.side) || !atEnd()) playMove(m); });
@@ -1015,7 +1034,7 @@
         const line = exactLineFor(cursor, em);
         const tr = document.createElement('tr');
         tr.innerHTML = '<td>' + (k + 1) + '</td><td><span class="sw" style="background:' + exactColor(o.winner, s.side) + '"></span>' + E.describeMove(em) + '</td>' +
-          '<td class="' + exactClass(o.winner, s.side) + '">' + exactMoveText(o, s.side) + (o.tactic ? ' <span title="' + o.tactic + '">\u26A1</span>' : '') + '</td><td>' + repliesText(o) + '</td><td class="pvcell">' + (line ? exactLineText(E.applyMove(s, em), line) : '…') + '</td>';
+          '<td class="' + exactClass(o.winner, s.side) + '">' + exactMoveText(o, s.side) + (o.tactic ? ' <span title="' + o.tactic + '">\u26A1</span>' : '') + '</td><td>' + repliesText(o) + '</td><td class="pvcell">' + (line ? exactLineText(E.applyMove(s, em), line) : (Oracle.mode() === 'static' ? '' : '…')) + '</td>';
         tr.addEventListener('mouseenter', () => { hoverMove = id; renderBoard(); });
         tr.addEventListener('mouseleave', () => { hoverMove = null; renderBoard(); });
         tr.addEventListener('click', () => { hoverMove = null; if (shared) { if (browserPlays(s.side) && atEnd()) sharedMove(em); } else if (!aiControls(s.side) || !atEnd()) playMove(em); });
