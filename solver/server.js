@@ -20,12 +20,21 @@
  *     -> { line: [{from, to, capture}] }  best play after that move (winner fastest,
  *        loser slowest, draws avoid repeating), at most n plies
  *
+ *   Shared game (one game at a time, stored in solver/games/<id>.json):
+ *   GET  /game                      -> { id, moves, lambBy, values, result, ... }
+ *   POST /game/new?lamb=tables|remote   start a new game; the lamb side is played by the
+ *                                   tables at once, or must be posted by a remote player
+ *   POST /game/move?from=<cell>&to=<cell>  play a move for the side to move
+ *   POST /game/undo                 take back the last ply (two plies when the tables answer)
+ *
  * Every response carries Access-Control-Allow-Origin: * so a page opened from
  * file:// can query it. Only listens on localhost.
  */
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 const B = require(path.join(__dirname, '..', 'bitboard.js'));
+const E = require(path.join(__dirname, '..', 'engine.js'));
 const TB = require(path.join(__dirname, 'tables.js'));
 
 const port = +(process.argv[2] || 8787);
@@ -35,8 +44,47 @@ if (!TB.available()) {
 }
 
 function send(res, code, obj) {
-  res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
+  res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(obj));
+}
+
+// ---- shared game -----------------------------------------------------------
+const GAMES_DIR = path.join(__dirname, 'games');
+fs.mkdirSync(GAMES_DIR, { recursive: true });
+let game = null;   // { id, started, lambBy, moves: [{from,to,capture,by,value,t}], version }
+function gameState(g) {   // replay the record with the reference engine
+  let s = E.initialState();
+  for (const m of g.moves) s = E.applyMove(s, { from: m.from, to: m.to, capture: m.capture ? m.to : null });
+  return s;
+}
+function exact(s) { const p = B.fromState(s); const v = TB.value(p, s.turnsSinceCapture); return { winner: v.winner, d: v.d, dExact: v.dExact }; }
+function saveGame(g) { fs.writeFileSync(path.join(GAMES_DIR, g.id + '.json'), JSON.stringify(g, null, 1)); }
+function newGame(lambBy) {
+  game = { id: new Date().toISOString().replace(/[:.]/g, '-'), started: Date.now(), lambBy, moves: [], version: 1, start: exact(E.initialState()) };
+  saveGame(game);
+  return game;
+}
+function applyRecorded(g, em, by) {
+  const s = gameState(g);
+  if (!E.isLegal(s, em)) return 'illegal move';
+  const t = E.applyMove(s, em);
+  const ex = exact(t), before = exact(s);
+  const mover = s.side, rank = v => v === mover ? 2 : v === TB.DRAW ? 1 : 0;
+  g.moves.push({ from: em.from, to: em.to, capture: em.capture !== null, by, side: s.side, text: E.describeMove(em), value: ex, blunder: rank(ex.winner) < rank(before.winner), at: Date.now() });
+  g.version++;
+  const r = E.result(t);
+  if (r) g.result = { winner: r.winner, reason: r.reason };
+  return null;
+}
+function tablesReply(g) {   // the tables play the lamb side with the trap ranking
+  const s = gameState(g);
+  if (E.result(s) || s.side !== E.LAMB) return;
+  const opts = TB.bestMoves(B.fromState(s), s.turnsSinceCapture, { depth: DEPTH });
+  applyRecorded(g, B.toEngineMove(opts[0].move), 'tables');
+}
+function gameJson(g) {
+  const s = gameState(g);
+  return { id: g.id, lambBy: g.lambBy, version: g.version, moves: g.moves, sideToMove: s.side, result: g.result || null, lambs: s.lambs, clock: s.turnsSinceCapture, start: g.start };
 }
 
 const DEPTH = 3;   // opponent moves considered by the blunder probability
@@ -67,7 +115,28 @@ function bestLine(p, n) {
 
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://localhost');
-  if (u.pathname === '/health') return send(res, 200, { ok: true, tables: TB.TABLES, clock: TB.CLOCK });
+  if (req.method === 'OPTIONS') return send(res, 204, {});
+  if (u.pathname === '/health') return send(res, 200, { ok: true, tables: TB.TABLES, clock: TB.CLOCK, game: game ? game.id : null });
+  if (u.pathname === '/game') return send(res, 200, game ? gameJson(game) : { id: null });
+  if (u.pathname === '/game/new') { newGame(u.searchParams.get('lamb') === 'remote' ? 'remote' : 'tables'); return send(res, 200, gameJson(game)); }
+  if (u.pathname === '/game/undo') {
+    if (!game) return send(res, 400, { error: 'no game' });
+    if (game.moves.length) { game.moves.pop(); if (game.lambBy === 'tables' && game.moves.length && game.moves[game.moves.length - 1].by === 'tables') game.moves.pop(); }
+    delete game.result; game.version++; saveGame(game);
+    return send(res, 200, gameJson(game));
+  }
+  if (u.pathname === '/game/move') {
+    if (!game) newGame('tables');
+    const from = +u.searchParams.get('from'), to = +u.searchParams.get('to');
+    const s = gameState(game);
+    const legalMove = E.legalMoves(s).find(m => m.from === from && m.to === to);
+    if (!legalMove) return send(res, 400, { error: 'illegal move', state: gameJson(game) });
+    const err = applyRecorded(game, legalMove, u.searchParams.get('by') || (s.side === E.WOLF ? 'wolf-player' : 'lamb-player'));
+    if (err) return send(res, 400, { error: err });
+    if (game.lambBy === 'tables') tablesReply(game);
+    saveGame(game);
+    return send(res, 200, gameJson(game));
+  }
   if (u.pathname !== '/eval' && u.pathname !== '/line') return send(res, 404, { error: 'not found' });
   const w = +u.searchParams.get('w'), l = +u.searchParams.get('l'), side = +u.searchParams.get('side'), clock = +(u.searchParams.get('clock') || 0);
   const ALL = (1 << 25) - 1;

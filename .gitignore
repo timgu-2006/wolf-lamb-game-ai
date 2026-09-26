@@ -18,3 +18,5 @@ solver/formation_*.txt
 solver/fortress_*.txt
 solver/wolfshape_*.txt
 solver/practical_out.txt
+solver/games/
+solver/compact_games_*.txt

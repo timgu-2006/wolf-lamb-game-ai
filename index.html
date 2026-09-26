@@ -241,6 +241,14 @@
           <span class="hint" style="margin:0">when the server is connected, all values are exact and the engine only breaks ties</span>
           <button id="oracleConnect" title="Retry connecting to node solver/server.js">Connect</button>
         </div>
+        <label for="sharedOn">Shared game</label>
+        <div class="inline">
+          <input type="checkbox" id="sharedOn">
+          <span class="hint" style="margin:0">play the server's game: you are Wolf, lambs by</span>
+          <select id="sharedLamb"><option value="tables">the tables</option><option value="remote">remote player</option></select>
+          <button id="sharedNew">New shared game</button>
+          <span id="sharedState" class="hint" style="margin:0"></span>
+        </div>
         <label for="topN">Show candidates</label>
         <select id="topN">
           <option value="1">best only</option>
@@ -288,6 +296,7 @@
   const cur = () => history[cursor];
   const atEnd = () => cursor === history.length - 1;
   const aiControls = side => {
+    if (shared) return false;
     const m = $('mode').value;
     return m === 'aa' || (m === 'hw' && side === E.LAMB) || (m === 'hl' && side === E.WOLF);
   };
@@ -515,6 +524,50 @@
   $('oracleConnect').addEventListener('click', async () => { await Oracle.check(); ensureAllOracle(); schedule(); });
   $('useOracle').addEventListener('change', schedule);
 
+  // ---- shared game (server-owned, synced by polling) ---------------------
+  let shared = false, sharedVersion = -1, sharedTimer = null, sharedId = null;
+  const sharedBase = 'http://localhost:8787';
+  async function sharedApi(p, method) {
+    try { const r = await fetch(sharedBase + p, { method: method || 'GET', cache: 'no-store' }); return await r.json(); } catch (e) { return null; }
+  }
+  function rebuildFromMoves(moves) {
+    const old = history, oldEvals = evals, oldOracle = oracle;
+    let st = E.initialState(); const h = [st];
+    for (const m of moves) { const em = { from: m.from, to: m.to, capture: m.capture ? m.to : null }; if (!E.isLegal(st, em)) break; st = E.applyMove(st, em); h.push(st); }
+    const ev = [], ox = [];
+    for (let i = 0; i < h.length; i++) { const same = old[i] && B.key(B.fromState(old[i])) === B.key(B.fromState(h[i])) && old[i].turnsSinceCapture === h[i].turnsSinceCapture; ev.push(same ? oldEvals[i] : null); ox.push(same ? oldOracle[i] : null); }
+    history = h; evals = ev; oracle = ox; cursor = h.length - 1; selected = null;
+    terminalEval(cursor);
+  }
+  async function syncShared() {
+    if (!shared) return;
+    const g = await sharedApi('/game');
+    if (!g) { $('sharedState').textContent = 'server not reachable'; return; }
+    if (!g.id) { $('sharedState').textContent = 'no game yet: press New shared game'; return; }
+    if (g.version !== sharedVersion || g.id !== sharedId) {
+      sharedVersion = g.version; sharedId = g.id;
+      rebuildFromMoves(g.moves);
+      schedule();
+    }
+    const last = g.moves.length ? g.moves[g.moves.length - 1] : null;
+    $('sharedState').textContent = 'game ' + g.id.slice(11, 19).replace(/-/g, ':') + ' · lambs by ' + g.lambBy + ' · ' + g.moves.length + ' plies' +
+      (g.result ? ' · over' : g.sideToMove === E.WOLF ? ' · your move' : g.lambBy === 'remote' ? ' · waiting for the remote lamb' : '') +
+      (last && last.blunder ? ' · last move was an exact blunder' : '');
+  }
+  async function sharedMove(em) {
+    const r = await sharedApi('/game/move?from=' + em.from + '&to=' + em.to + '&by=browser', 'POST');
+    if (r && r.error) $('sharedState').textContent = r.error;
+    await syncShared();
+  }
+  function setShared(on) {
+    shared = on; clearInterval(sharedTimer); sharedTimer = null;
+    if (on) { leaveSetup(); sharedVersion = -1; syncShared(); sharedTimer = setInterval(syncShared, 700); }
+    else $('sharedState').textContent = '';
+    render();
+  }
+  $('sharedOn').addEventListener('change', () => setShared($('sharedOn').checked));
+  $('sharedNew').addEventListener('click', async () => { if (!shared) { $('sharedOn').checked = true; setShared(true); } await sharedApi('/game/new?lamb=' + $('sharedLamb').value, 'POST'); sharedVersion = -1; syncShared(); });
+
   // ---- scheduling: what should the engine be doing right now? -----------
   let aiTimer = null;
   function schedule() {
@@ -671,7 +724,7 @@
     terminalEval(0);
     schedule();
   }
-  $('setup').addEventListener('click', () => { if (setup) leaveSetup(); else enterSetup(); render(); });
+  $('setup').addEventListener('click', () => { if (shared) { $('sharedOn').checked = false; setShared(false); } if (setup) leaveSetup(); else enterSetup(); render(); });
   $('setupCancel').addEventListener('click', () => { leaveSetup(); schedule(); });
   $('setupDone').addEventListener('click', finishSetup);
   $('setupClear').addEventListener('click', () => { setup.board = new Array(25).fill(E.EMPTY); render(); });
@@ -824,7 +877,7 @@
         text(bx, by + 10, o.winner === 3 ? '' : (o.dExact === false ? '\u2265' : '') + String(moveLen(o)), 'sc', g);
         g.addEventListener('mouseenter', () => { hoverMove = id; renderBoard(); });
         g.addEventListener('mouseleave', () => { hoverMove = null; renderBoard(); });
-        g.addEventListener('click', ev => { ev.stopPropagation(); hoverMove = null; if (!aiControls(s.side) || !atEnd()) playMove(m); });
+        g.addEventListener('click', ev => { ev.stopPropagation(); hoverMove = null; if (shared) { if (s.side === E.WOLF && atEnd()) sharedMove(m); } else if (!aiControls(s.side) || !atEnd()) playMove(m); });
       }
       if (hovering) {
         const o = ox.moves.find(o => (o.from | (o.to << 5)) === hoverMove);
@@ -885,10 +938,11 @@
     if (setup) return;
     const s = cur();
     if (E.result(s) || aiControls(s.side)) return;
+    if (shared && (s.side !== E.WOLF || !atEnd())) return;
     const legal = E.legalMoves(s);
     if (selected !== null) {
       const m = legal.find(x => x.from === selected && x.to === i);
-      if (m) { playMove(m); return; }
+      if (m) { if (shared) { selected = null; sharedMove(m); } else playMove(m); return; }
     }
     selected = (s.board[i] === s.side && legal.some(x => x.from === i) && selected !== i) ? i : null;
     renderBoard();
@@ -906,6 +960,7 @@
     } else {
       $('status').textContent = E.sideName(s.side) + ' to move ' + (s.side === E.WOLF ? '\u{1F43A}' : '\u{1F411}');
       $('reason').textContent = !atEnd() ? 'viewing move ' + cursor + ' of ' + (history.length - 1)
+        : shared ? (s.side === E.WOLF ? 'shared game: your move as Wolf' : 'shared game: waiting for the lamb move')
         : aiControls(s.side) ? 'engine is choosing a move' : selected === null ? 'select a piece' : 'select a destination';
     }
     const ev = evals[cursor], ox = oracle[cursor];
@@ -955,7 +1010,7 @@
           '<td class="' + exactClass(o.winner, s.side) + '">' + exactMoveText(o, s.side) + '</td><td>' + repliesText(o) + '</td><td class="pvcell">' + (line ? exactLineText(E.applyMove(s, em), line) : '…') + '</td>';
         tr.addEventListener('mouseenter', () => { hoverMove = id; renderBoard(); });
         tr.addEventListener('mouseleave', () => { hoverMove = null; renderBoard(); });
-        tr.addEventListener('click', () => { hoverMove = null; if (!aiControls(s.side) || !atEnd()) playMove(em); });
+        tr.addEventListener('click', () => { hoverMove = null; if (shared) { if (s.side === E.WOLF && atEnd()) sharedMove(em); } else if (!aiControls(s.side) || !atEnd()) playMove(em); });
         tb.appendChild(tr);
       });
       tbl.appendChild(tb); box.appendChild(tbl);
@@ -1096,14 +1151,15 @@
   $('prev').addEventListener('click', () => goTo(cursor - 1));
   $('next').addEventListener('click', () => goTo(cursor + 1));
   $('last').addEventListener('click', () => goTo(history.length - 1));
-  $('undo').addEventListener('click', () => {
+  $('undo').addEventListener('click', async () => {
+    if (shared) { await sharedApi('/game/undo', 'POST'); sharedVersion = -1; syncShared(); return; }
     if (history.length < 2) return;
     history.pop(); evals.pop(); oracle.pop();
     // In human-vs-AI, also take back the AI's reply so the human is to move again.
     while (history.length > 1 && $('mode').value !== 'aa' && $('mode').value !== 'hh' && aiControls(history[history.length - 1].side)) { history.pop(); evals.pop(); oracle.pop(); }
     cursor = history.length - 1; selected = null; schedule();
   });
-  $('reset').addEventListener('click', () => { leaveSetup(); history = [E.initialState()]; evals = [null]; oracle = [null]; cursor = 0; selected = null; schedule(); });
+  $('reset').addEventListener('click', async () => { if (shared) { await sharedApi('/game/new?lamb=' + $('sharedLamb').value, 'POST'); sharedVersion = -1; syncShared(); return; } leaveSetup(); history = [E.initialState()]; evals = [null]; oracle = [null]; cursor = 0; selected = null; schedule(); });
   $('aimove').addEventListener('click', () => {
     if (E.result(cur())) return;
     if (!atEnd()) { history = history.slice(0, cursor + 1); evals = evals.slice(0, cursor + 1); oracle = oracle.slice(0, cursor + 1); }
