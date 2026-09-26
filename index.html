@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wolf and Lamb Analysis</title>
+<style>
+  :root {
+    --bg: #f4efe6; --panel: #ffffff; --ink: #2b2a27; --muted: #6f6a60; --faint: #a9a295;
+    --board: #d9cbb0; --line: #8f7f62; --cell-hi: rgba(242, 184, 75, .55); --last: rgba(74, 95, 133, .35);
+    --wolf: #4a4038; --wolf-ink: #f4efe6; --lamb: #fbf7ee; --lamb-ink: #4a4038;
+    --border: #cfc4ad; --accent: #2f6fdb; --accent-soft: rgba(47, 111, 219, .12);
+    --wolf-bar: #5a4a3e; --lamb-bar: #e6dcc6; --grid: #e3dccd; --tip-bg: #2b2a27; --tip-ink: #f4efe6;
+    --best: #3aa0e0; --pv: #7c5cd6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1d1b18; --panel: #27241f; --ink: #ece6d9; --muted: #a49d8f; --faint: #6c665b;
+      --board: #4a4235; --line: #7b6d55; --cell-hi: rgba(201, 146, 47, .55); --last: rgba(122, 150, 200, .35);
+      --wolf: #171411; --wolf-ink: #ece6d9; --lamb: #e8dfcb; --lamb-ink: #2b2a27;
+      --border: #5a5142; --accent: #7aa7ff; --accent-soft: rgba(122, 167, 255, .16);
+      --wolf-bar: #3a3028; --lamb-bar: #c9bda3; --grid: #3a352c; --tip-bg: #ece6d9; --tip-ink: #1d1b18;
+      --best: #4fb2ea; --pv: #a48cf0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1d1b18; --panel: #27241f; --ink: #ece6d9; --muted: #a49d8f; --faint: #6c665b;
+    --board: #4a4235; --line: #7b6d55; --cell-hi: rgba(201, 146, 47, .55); --last: rgba(122, 150, 200, .35);
+    --wolf: #171411; --wolf-ink: #ece6d9; --lamb: #e8dfcb; --lamb-ink: #2b2a27;
+    --border: #5a5142; --accent: #7aa7ff; --accent-soft: rgba(122, 167, 255, .16);
+    --wolf-bar: #3a3028; --lamb-bar: #c9bda3; --grid: #3a352c; --tip-bg: #ece6d9; --tip-ink: #1d1b18;
+    --best: #4fb2ea; --pv: #a48cf0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 16px; }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: minmax(280px, 560px) minmax(300px, 1fr); gap: 16px; max-width: 1200px; margin: 0 auto; }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
+  .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+  .panel h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+  svg#board { width: 100%; height: auto; display: block; border-radius: 12px; background: var(--board); user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  svg#board text { font-family: inherit; }
+  .coord { fill: var(--muted); font-size: 13px; }
+  .grid-line { stroke: var(--line); stroke-width: 1.5; opacity: .5; }
+  .piece { cursor: default; }
+  .piece.mine { cursor: pointer; }
+  .piece .body { stroke: rgba(0,0,0,.25); stroke-width: 1.5; }
+  .piece.wolf .body { fill: var(--wolf); }
+  .piece.lamb .body { fill: var(--lamb); }
+  .piece .glyph { font-size: 38px; pointer-events: none; }
+  .sel-ring { fill: none; stroke: var(--accent); stroke-width: 4; }
+  .target-dot { fill: var(--accent); opacity: .55; cursor: pointer; }
+  .cand { cursor: pointer; }
+  .cand .arrow { stroke-width: 6; stroke-linecap: round; fill: none; opacity: .85; }
+  .cand .badge { stroke: rgba(0,0,0,.35); stroke-width: 1.5; }
+  .cand .wr { font-size: 15px; font-weight: 700; fill: #1b1a17; text-anchor: middle; pointer-events: none; }
+  .cand .sc { font-size: 10.5px; fill: #1b1a17; text-anchor: middle; pointer-events: none; opacity: .85; }
+  .cand.dim { opacity: .18; }
+  .pv .arrow { stroke: var(--pv); stroke-width: 5; stroke-linecap: round; fill: none; }
+  .pv .num { fill: var(--pv); stroke: var(--panel); stroke-width: 2; }
+  .pv .numt { fill: #fff; font-size: 13px; font-weight: 700; text-anchor: middle; pointer-events: none; }
+  .status-line { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  #status { font-size: 17px; font-weight: 600; }
+  #reason { color: var(--muted); font-size: 13px; }
+  .wrbar { position: relative; height: 26px; border-radius: 7px; overflow: hidden; background: var(--lamb-bar); border: 1px solid var(--border); }
+  .wrbar .wolfpart { position: absolute; left: 0; top: 0; bottom: 0; background: var(--wolf-bar); transition: width .25s; }
+  .wrbar .lbl { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; font-size: 13px; font-weight: 600; padding: 0 8px; }
+  .wrbar .lbl.w { left: 0; color: var(--wolf-ink); }
+  .wrbar .lbl.l { right: 0; color: var(--lamb-ink); }
+  .wrbar .mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,.55); }
+  .evalline { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .evalline b { color: var(--ink); font-weight: 600; }
+  table.cands { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  table.cands th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; padding: 2px 6px; border-bottom: 1px solid var(--border); }
+  table.cands td { padding: 4px 6px; border-bottom: 1px solid var(--grid); white-space: nowrap; cursor: pointer; }
+  table.cands td.pvcell { white-space: normal; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; max-width: 280px; }
+  table.cands tr:hover td { background: var(--accent-soft); }
+  table.cands .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(0,0,0,.25); }
+  .empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+  svg#graph { width: 100%; height: auto; display: block; cursor: crosshair; }
+  .g-grid { stroke: var(--grid); stroke-width: 1; }
+  .g-mid { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 3 3; }
+  .g-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+  .g-area { fill: var(--accent); opacity: .12; }
+  .g-cur { stroke: var(--ink); stroke-width: 1.5; }
+  .g-dot { fill: var(--accent); stroke: var(--panel); stroke-width: 2; }
+  .g-txt { fill: var(--muted); font-size: 11px; }
+  .g-tip-bg { fill: var(--tip-bg); rx: 4; }
+  .g-tip { fill: var(--tip-ink); font-size: 11px; }
+  .nav { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .nav .spacer { flex: 1; }
+  button, select {
+    font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--ink); cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .moves { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; max-height: 190px; overflow: auto; margin-top: 8px;
+    display: grid; grid-template-columns: auto 1fr 1fr; column-gap: 10px; row-gap: 1px; }
+  .moves .n { color: var(--muted); padding: 2px 0; }
+  .moves .mv { padding: 2px 6px; border-radius: 5px; cursor: pointer; }
+  .moves .mv:hover { background: var(--accent-soft); }
+  .moves .mv.cur { background: var(--accent); color: #fff; }
+  .moves .mv.blunder::after { content: " ?"; color: #d9534f; font-weight: 700; }
+  .moves .mv.cur.blunder::after { color: #ffd6d6; }
+  .moves .mv.exblunder::after { content: " ??"; color: #d9534f; font-weight: 700; }
+  .moves .mv.cur.exblunder::after { color: #ffd6d6; }
+  .cand .exring { fill: none; stroke-width: 3.5; }
+  .ex-win { color: #2e9e4f; } .ex-draw { color: var(--muted); } .ex-loss { color: #d9534f; }
+  #oracleState { color: var(--muted); font-size: 13px; }
+  #oracleState.on { color: #2e9e4f; }
+  .settings { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center; font-size: 14px; }
+  .settings label { color: var(--muted); font-size: 13px; }
+  .settings .inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .settings input[type=checkbox] { width: 16px; height: 16px; }
+  .hint { color: var(--muted); font-size: 12.5px; margin-top: 8px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  details ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; }
+  .kbd { font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Wolf and Lamb</h1>
+  <span class="sub">engine analysis &middot; alpha-beta search on bitboards, running in a Web Worker</span>
+  <span id="oracleState">exact tables: checking…</span>
+</header>
+<main>
+  <div class="col">
+    <svg id="board" viewBox="0 0 460 460" aria-label="Game board"></svg>
+    <div class="panel">
+      <div class="nav">
+        <button id="first" title="First position (Home)">&#x23EE;</button>
+        <button id="prev" title="Previous move (Left)">&#x25C0;</button>
+        <button id="next" title="Next move (Right)">&#x25B6;</button>
+        <button id="last" title="Last position (End)">&#x23ED;</button>
+        <span class="spacer"></span>
+        <button id="aimove" title="Let the engine play one move for the side to move">AI move</button>
+        <button id="undo" title="Take back the last move">Undo</button>
+        <button id="reset" class="primary">New game</button>
+      </div>
+      <div class="moves" id="moves"></div>
+      <div class="nav" style="margin-top:8px">
+        <button id="review" title="Analyse every position of the game for the graph">Review game</button>
+        <button id="copy" title="Copy the move list">Copy record</button>
+        <button id="load" title="Paste a move list">Load record</button>
+        <span class="spacer"></span>
+        <span id="reviewState" class="hint" style="margin:0"></span>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="panel">
+      <div class="status-line"><div id="status"></div><div id="reason"></div></div>
+      <div class="wrbar">
+        <div class="wolfpart" id="wolfpart" style="width:50%"></div>
+        <div class="mid"></div>
+        <span class="lbl w" id="wrWolf">Wolf 50%</span>
+        <span class="lbl l" id="wrLamb">Lamb 50%</span>
+      </div>
+      <div class="evalline">
+        <span id="exactLine">exact <b id="exactText">-</b></span>
+        <span id="engineLine">eval <b id="evalText">-</b> &middot; depth <b id="depthText">-</b> &middot; <b id="nodesText">-</b> nodes</span>
+        <span id="engineState"></span>
+        <span id="lambCount"></span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Candidate moves</h2>
+      <div id="candBox"></div>
+    </div>
+    <div class="panel">
+      <h2 id="graphTitle">Wolf win rate by ply</h2>
+      <svg id="graph" viewBox="0 0 600 170"></svg>
+    </div>
+    <div class="panel">
+      <h2>Settings</h2>
+      <div class="settings">
+        <label for="mode">Players</label>
+        <select id="mode">
+          <option value="hh">Human vs Human (analysis only)</option>
+          <option value="hw" selected>Human plays Wolf</option>
+          <option value="hl">Human plays Lamb</option>
+          <option value="aa">AI vs AI</option>
+        </select>
+        <label for="aiTime">AI move time</label>
+        <select id="aiTime">
+          <option value="200">0.2 s</option>
+          <option value="1000" selected>1 s</option>
+          <option value="3000">3 s</option>
+          <option value="10000">10 s</option>
+        </select>
+        <label for="analysisOn">Analysis</label>
+        <div class="inline">
+          <input type="checkbox" id="analysisOn" checked>
+          <select id="anaTime">
+            <option value="1000">1 s</option>
+            <option value="3000" selected>3 s</option>
+            <option value="10000">10 s</option>
+            <option value="30000">30 s</option>
+          </select>
+          <span class="hint" style="margin:0">per position</span>
+        </div>
+        <label for="useOracle">Exact tables</label>
+        <div class="inline">
+          <input type="checkbox" id="useOracle" checked>
+          <span class="hint" style="margin:0">when the server is connected, all values are exact and the engine only breaks ties</span>
+          <button id="oracleConnect" title="Retry connecting to node solver/server.js">Connect</button>
+        </div>
+        <label for="topN">Show candidates</label>
+        <select id="topN">
+          <option value="1">best only</option>
+          <option value="3">top 3</option>
+          <option value="5" selected>top 5</option>
+          <option value="99">all</option>
+        </select>
+      </div>
+      <div class="hint">Click a piece then a square, or click a candidate badge to play it. Hover a candidate to see its line. <span class="kbd">&larr;</span> <span class="kbd">&rarr;</span> step through moves. Positive eval favours the Wolf side. Start <span class="kbd">node solver/server.js</span> and the page switches to the solved tables: every value shown is the exact game result (W/D/L badges with plies to the next capture or the end), <span class="kbd">??</span> marks a move that changed the exact result, and the engine is only used to break ties.</div>
+    </div>
+    <div class="panel">
+      <details>
+        <summary>Rules</summary>
+        <ul>
+          <li>Wolves move first. Any piece steps one square up, down, left or right into an empty square.</li>
+          <li>A wolf may also capture a lamb two squares away in a line if the square between is empty. The wolf jumps onto the lamb.</li>
+          <li>A side with no legal move on its turn loses. Wolves also win when fewer than 3 lambs remain.</li>
+          <li>Threefold repetition or 100 turns without a capture is a draw.</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+</main>
+
+<script src="engine.js"></script>
+<script src="bitboard.js"></script>
+<script src="ai.js"></script>
+<script>
+(function () {
+  'use strict';
+  const E = WolfLamb, B = Bitboard, AI = WolfLambAI;
+  const $ = id => document.getElementById(id);
+  const NS = 'http://www.w3.org/2000/svg';
+  const WR_SCALE = 350;                       // eval units per "e" in the win-rate logistic
+
+  // ---- game model --------------------------------------------------------
+  let history = [E.initialState()];           // history[i] = position after i plies
+  let cursor = 0;                             // viewed position
+  let evals = [null];                         // evals[i] = { wr, text, depth } for history[i] (wolf perspective)
+  let analysis = null;                        // latest engine output for history[cursor]
+  let selected = null;                        // selected piece cell for human moves
+  let hoverMove = null;                       // packed move whose PV is shown
+  let reviewing = false, reviewIndex = 0;
+
+  const cur = () => history[cursor];
+  const atEnd = () => cursor === history.length - 1;
+  const aiControls = side => {
+    const m = $('mode').value;
+    return m === 'aa' || (m === 'hw' && side === E.LAMB) || (m === 'hl' && side === E.WOLF);
+  };
+
+  // ---- score helpers -----------------------------------------------------
+  function wolfScore(score, side) { return side === E.WOLF ? score : -score; }
+  function winRate(ws) {                      // wolf win probability from a wolf-perspective score
+    if (ws > AI.MATE_BOUND) return 1;
+    if (ws < -AI.MATE_BOUND) return 0;
+    return 1 / (1 + Math.exp(-ws / WR_SCALE));
+  }
+  function scoreText(ws) {
+    if (ws > AI.MATE_BOUND) return 'Wolf wins in ' + (AI.WIN - ws);
+    if (ws < -AI.MATE_BOUND) return 'Lamb wins in ' + (AI.WIN + ws);
+    return (ws > 0 ? '+' : '') + (ws / 100).toFixed(2);
+  }
+  function pct(x) { return Math.round(x * 100) + '%'; }
+  function fmtNodes(n) {
+    if (n == null) return '-';
+    return n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(0) + 'k' : String(n);
+  }
+  // Colour of a candidate: best move blue, others green -> yellow -> red by win-rate drop.
+  function candColor(dropPts, isBest) {
+    if (isBest) return 'var(--best)';
+    const t = Math.min(dropPts / 30, 1);
+    return 'hsl(' + Math.round(118 * (1 - t)) + ' 68% 58%)';
+  }
+
+  // ---- engine worker -----------------------------------------------------
+  const Engine = (function () {
+    let worker = null, job = null, seq = 0;
+    const src = 'const Bitboard = (' + B._source + ')();\n' +
+      'const WolfLambAI = (' + AI._source + ')(Bitboard);\n' +
+      'onmessage = function (e) {\n' +
+      '  const d = e.data;\n' +
+      '  const prog = it => postMessage({ type: "progress", id: d.id, depth: it.depth, nodes: it.nodes, timeMs: it.timeMs,\n' +
+      '    moves: it.moves || [{ move: it.move, score: it.score, pv: it.pv }] });\n' +
+      '  let r;\n' +
+      '  if (d.kind === "analyze") r = WolfLambAI.analyze(d.position, { timeMs: d.timeMs, depth: d.depth, history: d.history, contempt: 0, onIteration: prog });\n' +
+      '  else r = WolfLambAI.chooseMove(d.position, { timeMs: d.timeMs, history: d.history, onIteration: prog });\n' +
+      '  if (r && !r.moves) r.moves = [{ move: r.move, score: r.score, pv: r.pv }];\n' +
+      '  postMessage({ type: "done", id: d.id, depth: r ? r.depth : 0, nodes: r ? r.nodes : 0, timeMs: r ? r.timeMs : 0, moves: r ? r.moves : [] });\n' +
+      '};';
+    function make() {
+      const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      w.onmessage = e => {
+        const d = e.data;
+        if (!job || d.id !== job.id) return;
+        if (d.type === 'progress') job.onProgress(d);
+        else { const j = job; job = null; j.onDone(d); }
+      };
+      w.onerror = err => { console.error('engine worker error', err); const j = job; job = null; worker = make(); if (j) j.onDone({ moves: [], depth: 0, nodes: 0 }); };
+      return w;
+    }
+    worker = make();
+    return {
+      busy: () => !!job,
+      abort() { if (job) { worker.terminate(); job = null; worker = make(); } },
+      start(kind, state, priorStates, timeMs, onProgress, onDone) {
+        this.abort();
+        const id = ++seq;
+        job = { id, onProgress, onDone };
+        worker.postMessage({ id, kind, timeMs, position: B.fromState(state), history: priorStates.map(s => B.key(B.fromState(s))) });
+      },
+    };
+  })();
+
+  // ---- exact tables (local server, see solver/server.js) -----------------
+  const Oracle = (function () {
+    const base = 'http://localhost:8787';
+    let connected = false, seq = 0;
+    const cache = new Map();
+    function keyOf(s) { return B.key(B.fromState(s)) + ':' + s.turnsSinceCapture; }
+    function setState() {
+      const e = $('oracleState');
+      e.textContent = connected ? 'exact tables: connected' : 'exact tables: not connected (run node solver/server.js)';
+      e.className = connected ? 'on' : '';
+    }
+    async function check() {
+      try { const r = await fetch(base + '/health', { cache: 'no-store' }); connected = r.ok; } catch (e) { connected = false; }
+      setState();
+      return connected;
+    }
+    async function query(s) {
+      if (!connected) return null;
+      const k = keyOf(s);
+      if (cache.has(k)) return cache.get(k);
+      const p = B.fromState(s);
+      try {
+        const r = await fetch(base + '/eval?w=' + p.wolves + '&l=' + p.lambs + '&side=' + p.side + '&clock=' + s.turnsSinceCapture, { cache: 'no-store' });
+        if (!r.ok) return null;
+        const j = await r.json();
+        cache.set(k, j);
+        return j;
+      } catch (e) { connected = false; setState(); return null; }
+    }
+    const lines = new Map();
+    async function line(s, em) {
+      if (!connected) return null;
+      const k = keyOf(s) + ':' + em.from + '-' + em.to;
+      if (lines.has(k)) return lines.get(k);
+      const p = B.fromState(s);
+      try {
+        const r = await fetch(base + '/line?w=' + p.wolves + '&l=' + p.lambs + '&side=' + p.side + '&clock=' + s.turnsSinceCapture + '&from=' + em.from + '&to=' + em.to + '&n=8', { cache: 'no-store' });
+        if (!r.ok) return null;
+        const j = (await r.json()).line;
+        lines.set(k, j);
+        return j;
+      } catch (e) { return null; }
+    }
+    return { check, query, line, cached: s => cache.get(keyOf(s)) || null, isConnected: () => connected };
+  })();
+  const exactMode = () => Oracle.isConnected();
+  const exactWr = v => v.winner === E.WOLF ? 1 : v.winner === E.LAMB ? 0 : 0.5;   // for the graph/bar
+  function exactLineText(s, line) {
+    const out = []; let st = s;
+    for (const m of line || []) {
+      const em = { from: m.from, to: m.to, capture: m.capture ? m.to : null };
+      if (!E.isLegal(st, em)) break;
+      out.push(E.describeMove(em)); st = E.applyMove(st, em);
+      if (out.length >= 6) break;
+    }
+    return out.join(' ');
+  }
+  // fetch the exact lines of the shown candidates (cheap, cached) and re-render when they arrive
+  const exactLines = new Map();          // key(position)+move -> line
+  function exactLineFor(i, em) {
+    const s = history[i], k = B.key(B.fromState(s)) + ':' + s.turnsSinceCapture + ':' + em.from + '-' + em.to;
+    if (exactLines.has(k)) return exactLines.get(k);
+    exactLines.set(k, null);
+    Oracle.line(s, em).then(l => { if (l) { exactLines.set(k, l); if (cursor === i) render(); } });
+    return null;
+  }
+  let oracle = [null];                        // oracle[i] = server answer for history[i]
+  function exactClass(winner, mover) { return winner === 3 ? 'ex-draw' : winner === mover ? 'ex-win' : 'ex-loss'; }
+  function exactColor(winner, mover) { return winner === 3 ? '#8a8378' : winner === mover ? '#2e9e4f' : '#d9534f'; }
+  function exactText(v, mover) {
+    if (!v) return '-';
+    if (v.winner === 3) return 'draw';
+    return (v.winner === E.WOLF ? 'Wolf' : 'Lamb') + ' wins' + (v.t ? ' (' + v.t + ')' : '');
+  }
+  function exactMoveText(o, mover) {
+    if (o.winner === 3) return 'draw';
+    return (o.winner === mover ? 'win' : 'loss') + ' in ' + o.t;
+  }
+  function exactOf(i, em) {                   // exact outcome of move em from history[i]
+    const o = oracle[i]; if (!o) return null;
+    return o.moves.find(x => x.from === em.from && x.to === em.to) || null;
+  }
+  async function ensureOracle(i) {
+    if (oracle[i] || !Oracle.isConnected()) return oracle[i] || null;
+    const s = history[i];
+    const j = E.result(s) ? null : await Oracle.query(s);
+    if (history[i] !== s) return null;        // history changed meanwhile
+    oracle[i] = j;
+    render();
+    return j;
+  }
+  function ensureAllOracle() { for (let i = 0; i < history.length; i++) if (!oracle[i]) ensureOracle(i); }
+  // Exact blunder: the mover's exact outcome got worse (win -> draw/loss, draw -> loss).
+  function isExactBlunder(i) {
+    const a = oracle[i - 1], b = oracle[i]; if (!a || !b) return false;
+    const mover = history[i - 1].side;
+    const rank = (v, m) => v.winner === m ? 2 : v.winner === 3 ? 1 : 0;
+    const before = rank(a.value, mover);
+    const after = E.result(history[i]) ? (E.result(history[i]).winner === mover ? 2 : E.result(history[i]).winner === null ? 1 : 0) : rank(b.value, mover);
+    return after < before;
+  }
+  // AI move from the tables:
+  //   winning  -> the fastest win;
+  //   drawn    -> the drawing move that gives a random opponent the highest chance of being lost
+  //               within three moves (server-computed), one-move fraction as tie-break;
+  //   lost     -> the slowest loss, preferring the fewest winning replies for the opponent.
+  // The engine's ranking breaks whatever ties remain.
+  // blunder probability over 3 opponent moves (server), falling back to the one-move fraction
+  function trapScore(m) { return typeof m.blunder === 'number' ? m.blunder : (m.replies && m.replies.n ? m.replies.oppLoses / m.replies.n : 0); }
+  function trapNow(m) { return m.replies && m.replies.n ? m.replies.oppLoses / m.replies.n : 0; }
+  function oracleChoice(i, engineMoves) {
+    const o = oracle[i]; if (!o || !o.moves.length) return null;
+    const mover = history[i].side, best = o.moves[0];
+    let same;
+    if (best.winner === mover) same = o.moves.filter(m => m.winner === mover && m.t === best.t);
+    else if (best.winner === 3) {
+      const draws = o.moves.filter(m => m.winner === 3);
+      const top = Math.max(...draws.map(trapScore));
+      const cands = draws.filter(m => trapScore(m) === top);
+      const topNow = Math.max(...cands.map(trapNow));
+      same = cands.filter(m => trapNow(m) === topNow);
+    } else {
+      const losses = o.moves.filter(m => m.t === best.t);
+      const fewest = Math.min(...losses.map(m => m.replies ? m.replies.oppWins : 0));
+      same = losses.filter(m => (m.replies ? m.replies.oppWins : 0) === fewest);
+    }
+    for (const e of engineMoves || []) {
+      const em = B.toEngineMove(e.move);
+      if (same.some(m => m.from === em.from && m.to === em.to)) return em;
+    }
+    const pick = same[0] || best;
+    return { from: pick.from, to: pick.to, capture: pick.capture ? pick.to : null };
+  }
+  function exactOrder(moves, mover) {
+    const rank = m => m.winner === mover ? 2 : m.winner === 3 ? 1 : 0;
+    return moves.slice().sort((a, b) => {
+      const d = rank(b) - rank(a); if (d) return d;
+      if (a.winner === mover) return a.t - b.t;
+      if (a.winner === 3) return (trapScore(b) - trapScore(a)) || (trapNow(b) - trapNow(a));
+      return (b.t - a.t) || ((a.replies ? a.replies.oppWins : 0) - (b.replies ? b.replies.oppWins : 0));
+    });
+  }
+  function repliesText(m) {
+    if (!m.replies) return '';
+    const r = m.replies;
+    if (m.winner === 3 && typeof m.blunder === 'number') return 'lost within 3 moves: ' + Math.round(m.blunder * 100) + '% · now ' + r.oppLoses + '/' + r.n;
+    return r.oppLoses + ' of ' + r.n + ' replies lose';
+  }
+  $('oracleConnect').addEventListener('click', async () => { await Oracle.check(); ensureAllOracle(); schedule(); });
+  $('useOracle').addEventListener('change', schedule);
+
+  // ---- scheduling: what should the engine be doing right now? -----------
+  let aiTimer = null;
+  function schedule() {
+    clearTimeout(aiTimer); aiTimer = null;
+    Engine.abort();
+    analysis = null; hoverMove = null;
+    stopReview();
+    render();
+    const s = cur();
+    if (E.result(s)) return;
+    ensureOracle(cursor);
+    if (atEnd() && aiControls(s.side)) {
+      const idx = cursor;
+      aiTimer = setTimeout(() => startPlay(idx), 120);
+    } else if ($('analysisOn').checked && !exactMode()) {
+      startAnalysis(cursor, +$('anaTime').value, false);
+    }
+  }
+
+  async function startPlay(idx) {
+    const s = history[idx];
+    const useOracle = $('useOracle').checked && Oracle.isConnected();
+    if (useOracle) await ensureOracle(idx);
+    if (cursor !== idx || !atEnd() || history[idx] !== s) return;
+    $('engineState').textContent = 'engine thinking';
+    Engine.start(useOracle && oracle[idx] ? 'analyze' : 'play', s, history.slice(0, idx), +$('aiTime').value,
+      d => { if (cursor === idx) { analysis = d; recordEval(idx, d, s.side); render(); } },
+      d => {
+        if (!d.moves.length) return;
+        recordEval(idx, d, s.side);
+        if (cursor !== idx || !atEnd()) return;
+        analysis = d;
+        const choice = useOracle ? oracleChoice(idx, d.moves) : null;
+        playMove(choice || B.toEngineMove(d.moves[0].move));
+      });
+  }
+
+  function startAnalysis(idx, timeMs, isReview) {
+    const s = history[idx];
+    $('engineState').textContent = 'analysing';
+    Engine.start('analyze', s, history.slice(0, idx), timeMs,
+      d => { recordEval(idx, d, s.side); if (cursor === idx) { analysis = d; render(); } },
+      d => {
+        recordEval(idx, d, s.side);
+        if (cursor === idx) { analysis = d; $('engineState').textContent = 'done'; }
+        render();
+        if (isReview) reviewStep(idx + 1);
+      });
+  }
+
+  function recordEval(idx, d, side) {
+    if (!d.moves || !d.moves.length) return;
+    // Always keep the latest result, so the eval line agrees with the candidate list shown.
+    const ws = wolfScore(d.moves[0].score, side);
+    evals[idx] = { wr: winRate(ws), text: scoreText(ws), depth: d.depth };
+  }
+  function terminalEval(idx) {                // fill evals for finished positions
+    const r = E.result(history[idx]);
+    if (!r) return;
+    evals[idx] = { wr: r.winner === E.WOLF ? 1 : r.winner === E.LAMB ? 0 : 0.5, text: r.winner === null ? 'Draw' : E.sideName(r.winner) + ' wins', depth: 99 };
+  }
+
+  // ---- whole-game review -------------------------------------------------
+  function reviewStep(i) {
+    if (!reviewing) return;
+    while (i < history.length && E.result(history[i])) { terminalEval(i); i++; }
+    if (i >= history.length) { reviewing = false; $('reviewState').textContent = 'review complete'; render(); return; }
+    reviewIndex = i;
+    $('reviewState').textContent = 'reviewing ' + (i + 1) + ' / ' + history.length;
+    startAnalysis(i, 600, true);
+  }
+  function stopReview() { if (reviewing) { reviewing = false; $('reviewState').textContent = ''; } }
+  $('review').addEventListener('click', () => {
+    clearTimeout(aiTimer); Engine.abort(); analysis = null;
+    ensureAllOracle();
+    if (exactMode()) { $('reviewState').textContent = 'exact values for every ply'; render(); return; }
+    reviewing = true; reviewStep(0);
+  });
+
+  // ---- moves -------------------------------------------------------------
+  function playMove(em) {
+    const s = cur();
+    if (!E.isLegal(s, em)) return;
+    if (!atEnd()) { history = history.slice(0, cursor + 1); evals = evals.slice(0, cursor + 1); oracle = oracle.slice(0, cursor + 1); }
+    history.push(E.applyMove(s, em)); evals.push(null); oracle.push(null);
+    cursor = history.length - 1;
+    terminalEval(cursor);
+    selected = null;
+    schedule();
+  }
+  function goTo(i) {
+    i = Math.max(0, Math.min(history.length - 1, i));
+    if (i === cursor) return;
+    cursor = i; selected = null;
+    schedule();
+  }
+
+  // ---- board -------------------------------------------------------------
+  const boardEl = $('board');
+  const M = 30, CELL = 80;
+  const cx = i => M + (i % 5) * CELL + CELL / 2;
+  const cy = i => M + Math.floor(i / 5) * CELL + CELL / 2;
+  function el(name, attrs, parent) {
+    const e = document.createElementNS(NS, name);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function text(x, y, str, cls, parent, extra) {
+    const t = el('text', Object.assign({ x, y, class: cls, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, extra || {}), parent);
+    t.textContent = str;
+    return t;
+  }
+  function arrow(parent, from, to, cls, shorten) {
+    const x1 = cx(from), y1 = cy(from), x2 = cx(to), y2 = cy(to);
+    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+    const sx = x1 + ux * 22, sy = y1 + uy * 22, ex = x2 - ux * shorten, ey = y2 - uy * shorten;
+    const g = el('g', { class: cls }, parent);
+    el('path', { class: 'arrow', d: 'M' + sx + ' ' + sy + 'L' + ex + ' ' + ey }, g);
+    // arrow head
+    const hx = ex - ux * 12, hy = ey - uy * 12, px = -uy * 8, py = ux * 8;
+    el('path', { class: 'arrow', d: 'M' + (hx + px) + ' ' + (hy + py) + 'L' + ex + ' ' + ey + 'L' + (hx - px) + ' ' + (hy - py) }, g);
+    return g;
+  }
+
+  function renderBoard() {
+    const s = cur();
+    boardEl.innerHTML = '';
+    const res = E.result(s);
+    const humanTurn = !res && !aiControls(s.side);       // humans may also branch from an earlier position
+    const legal = humanTurn ? E.legalMoves(s) : [];
+    const last = s.moves.length ? s.moves[s.moves.length - 1] : null;
+
+    // grid
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+      const i = r * 5 + c;
+      const cell = el('rect', { x: M + c * CELL, y: M + r * CELL, width: CELL, height: CELL, fill: 'transparent' }, boardEl);
+      cell.addEventListener('click', () => onCellClick(i));
+      if (last && (last.to === i || last.from === i)) el('rect', { x: M + c * CELL + 2, y: M + r * CELL + 2, width: CELL - 4, height: CELL - 4, rx: 6, fill: 'var(--last)', 'pointer-events': 'none' }, boardEl);
+      if (last && last.capture === i) el('rect', { x: M + c * CELL + 2, y: M + r * CELL + 2, width: CELL - 4, height: CELL - 4, rx: 6, fill: 'none', stroke: '#d9534f', 'stroke-width': 2, 'stroke-dasharray': '5 4', 'pointer-events': 'none' }, boardEl);
+    }
+    for (let k = 0; k <= 5; k++) {
+      el('line', { class: 'grid-line', x1: M, y1: M + k * CELL, x2: M + 5 * CELL, y2: M + k * CELL }, boardEl);
+      el('line', { class: 'grid-line', x1: M + k * CELL, y1: M, x2: M + k * CELL, y2: M + 5 * CELL }, boardEl);
+    }
+    for (let k = 0; k < 5; k++) {
+      text(M + k * CELL + CELL / 2, M / 2, String(k + 1), 'coord', boardEl);
+      text(M / 2, M + k * CELL + CELL / 2, String(k + 1), 'coord', boardEl);
+    }
+    // selection and targets
+    if (selected !== null) el('circle', { class: 'sel-ring', cx: cx(selected), cy: cy(selected), r: 34 }, boardEl);
+
+    // pieces
+    for (let i = 0; i < 25; i++) {
+      const v = s.board[i];
+      if (v === E.EMPTY) continue;
+      const mine = humanTurn && v === s.side && legal.some(m => m.from === i);
+      const g = el('g', { class: 'piece ' + (v === E.WOLF ? 'wolf' : 'lamb') + (mine ? ' mine' : '') }, boardEl);
+      el('circle', { class: 'body', cx: cx(i), cy: cy(i), r: 30 }, g);
+      text(cx(i), cy(i) + 2, v === E.WOLF ? '\u{1F43A}' : '\u{1F411}', 'glyph', g);
+      g.addEventListener('click', ev => { ev.stopPropagation(); onCellClick(i); });
+    }
+    if (selected !== null) {
+      for (const m of legal) if (m.from === selected) {
+        const d = el('circle', { class: 'target-dot', cx: cx(m.to), cy: cy(m.to), r: m.capture !== null ? 14 : 10 }, boardEl);
+        if (m.capture !== null) d.setAttribute('fill', '#d9534f');
+        d.addEventListener('click', ev => { ev.stopPropagation(); playMove(m); });
+      }
+    }
+
+    // candidates: exact mode draws the tables' verdicts, otherwise the engine's
+    const ox = oracle[cursor];
+    if (exactMode() && ox && ox.moves.length && !res) {
+      const list = exactOrder(ox.moves, s.side).slice(0, +$('topN').value);
+      const hovering = hoverMove !== null && ox.moves.some(o => (o.from | (o.to << 5)) === hoverMove);
+      for (let k = list.length - 1; k >= 0; k--) {
+        const o = list[k], m = { from: o.from, to: o.to, capture: o.capture ? o.to : null }, id = o.from | (o.to << 5);
+        if (hovering && id === hoverMove) continue;
+        const color = exactColor(o.winner, s.side);
+        const g = el('g', { class: 'cand' + (hovering ? ' dim' : '') }, boardEl);
+        arrow(g, m.from, m.to, '', 30).querySelectorAll('.arrow').forEach(p => p.setAttribute('stroke', color));
+        const bx = cx(m.from) + (cx(m.to) - cx(m.from)) * 0.68, by = cy(m.from) + (cy(m.to) - cy(m.from)) * 0.68;
+        el('circle', { class: 'badge', cx: bx, cy: by, r: 21, fill: color }, g);
+        text(bx, by - 5, o.winner === 3 ? 'D' : o.winner === s.side ? 'W' : 'L', 'wr', g);
+        text(bx, by + 10, o.winner === 3 ? '' : String(o.t), 'sc', g);
+        g.addEventListener('mouseenter', () => { hoverMove = id; renderBoard(); });
+        g.addEventListener('mouseleave', () => { hoverMove = null; renderBoard(); });
+        g.addEventListener('click', ev => { ev.stopPropagation(); hoverMove = null; if (!aiControls(s.side) || !atEnd()) playMove(m); });
+      }
+      if (hovering) {
+        const o = ox.moves.find(o => (o.from | (o.to << 5)) === hoverMove);
+        const em = { from: o.from, to: o.to, capture: o.capture ? o.to : null };
+        const line = exactLineFor(cursor, em);
+        renderPV([em].concat(line || []), s);
+      }
+    } else if (!exactMode() && analysis && analysis.moves && analysis.moves.length && !res) {
+      const list = analysis.moves.slice(0, +$('topN').value);
+      const bestWr = moverWr(analysis.moves[0].score);
+      const hovering = hoverMove !== null && analysis.moves.some(e => e.move === hoverMove);
+      for (let k = list.length - 1; k >= 0; k--) {
+        const e = list[k], m = B.toEngineMove(e.move);
+        if (hovering && e.move === hoverMove) continue;
+        const wr = moverWr(e.score);
+        const color = candColor((bestWr - wr) * 100, k === 0);
+        const g = el('g', { class: 'cand' + (hovering ? ' dim' : '') }, boardEl);
+        arrow(g, m.from, m.to, '', 30).querySelectorAll('.arrow').forEach(p => p.setAttribute('stroke', color));
+        // badge at 70% of the way, so moves sharing a destination get different spots
+        const bx = cx(m.from) + (cx(m.to) - cx(m.from)) * 0.68, by = cy(m.from) + (cy(m.to) - cy(m.from)) * 0.68;
+        el('circle', { class: 'badge', cx: bx, cy: by, r: 21, fill: color }, g);
+        const ex = exactOf(cursor, m);
+        if (ex) el('circle', { class: 'exring', cx: bx, cy: by, r: 25, stroke: exactColor(ex.winner, s.side) }, g);
+        text(bx, by - 5, Math.round(wr * 100), 'wr', g);
+        text(bx, by + 10, shortScore(e.score, s.side), 'sc', g);
+        g.addEventListener('mouseenter', () => { hoverMove = e.move; renderBoard(); });
+        g.addEventListener('mouseleave', () => { hoverMove = null; renderBoard(); });
+        g.addEventListener('click', ev => { ev.stopPropagation(); hoverMove = null; if (!aiControls(s.side) || !atEnd()) playMove(m); });
+      }
+      if (hovering) renderPV(analysis.moves.find(e => e.move === hoverMove).pv, s);
+    }
+  }
+  function moverWr(score) { return winRate(score); }   // score is from the mover's view already
+  function shortScore(score, side) {
+    const ws = wolfScore(score, side);
+    if (Math.abs(ws) > AI.MATE_BOUND) return (ws > 0 ? 'W' : 'L') + '#' + (AI.WIN - Math.abs(ws));
+    return (ws > 0 ? '+' : '') + (ws / 100).toFixed(1);
+  }
+
+  function renderPV(pv, s0) {
+    // Walk the PV with the reference engine so only legal continuations are drawn.
+    let st = s0;
+    const g = el('g', { class: 'pv', 'pointer-events': 'none' }, boardEl);
+    const maxShow = 8;
+    for (let k = 0; k < pv.length && k < maxShow; k++) {
+      const em = typeof pv[k] === 'number' ? B.toEngineMove(pv[k]) : pv[k];
+      if (!E.isLegal(st, em)) break;
+      const a = arrow(g, em.from, em.to, '', 26);
+      a.setAttribute('opacity', String(Math.max(0.35, 1 - k * 0.09)));
+      const bx = cx(em.from) + (cx(em.to) - cx(em.from)) * 0.68, by = cy(em.from) + (cy(em.to) - cy(em.from)) * 0.68;
+      el('circle', { class: 'num', cx: bx, cy: by, r: 13, opacity: String(Math.max(0.5, 1 - k * 0.08)) }, g);
+      text(bx, by, String(k + 1), 'numt', g);
+      st = E.applyMove(st, em);
+    }
+  }
+
+  function onCellClick(i) {
+    const s = cur();
+    if (E.result(s) || aiControls(s.side)) return;
+    const legal = E.legalMoves(s);
+    if (selected !== null) {
+      const m = legal.find(x => x.from === selected && x.to === i);
+      if (m) { playMove(m); return; }
+    }
+    selected = (s.board[i] === s.side && legal.some(x => x.from === i) && selected !== i) ? i : null;
+    renderBoard();
+  }
+
+  // ---- side panel --------------------------------------------------------
+  function renderStatus() {
+    const s = cur(), res = E.result(s);
+    if (res) {
+      $('status').textContent = res.winner === null ? 'Draw' : E.sideName(res.winner) + ' side wins';
+      $('reason').textContent = res.reason;
+    } else {
+      $('status').textContent = E.sideName(s.side) + ' to move ' + (s.side === E.WOLF ? '\u{1F43A}' : '\u{1F411}');
+      $('reason').textContent = !atEnd() ? 'viewing move ' + cursor + ' of ' + (history.length - 1)
+        : aiControls(s.side) ? 'engine is choosing a move' : selected === null ? 'select a piece' : 'select a destination';
+    }
+    const ev = evals[cursor], ox = oracle[cursor];
+    const termWr = res ? (res.winner === E.WOLF ? 1 : res.winner === E.LAMB ? 0 : 0.5) : null;
+    $('engineLine').style.display = exactMode() ? 'none' : '';
+    $('exactLine').style.display = exactMode() ? '' : 'none';
+    if (exactMode()) {
+      const wr = termWr !== null ? termWr : ox ? exactWr(ox.value) : 0.5;
+      $('wolfpart').style.width = (wr * 100).toFixed(1) + '%';
+      const label = termWr !== null ? (res.winner === null ? 'Draw' : E.sideName(res.winner) + ' wins') : ox ? exactText(ox.value, s.side) : '…';
+      $('wrWolf').textContent = wr >= 0.5 ? label : '';
+      $('wrLamb').textContent = wr < 0.5 ? label : (wr === 0.5 ? '' : '');
+      $('exactText').textContent = res ? '-' : ox ? exactText(ox.value, s.side) : '…';
+      $('exactText').className = ox && !res ? exactClass(ox.value.winner, s.side) : '';
+      $('graphTitle').textContent = 'Exact result by ply';
+      $('engineState').textContent = Engine.busy() ? 'engine breaking ties' : '';
+    } else {
+      const wr = ev ? ev.wr : (termWr !== null ? termWr : 0.5);
+      $('wolfpart').style.width = (wr * 100).toFixed(1) + '%';
+      $('wrWolf').textContent = 'Wolf ' + pct(wr);
+      $('wrLamb').textContent = 'Lamb ' + pct(1 - wr);
+      $('evalText').textContent = ev ? ev.text : '-';
+      $('depthText').textContent = analysis ? analysis.depth : ev ? ev.depth : '-';
+      $('nodesText').textContent = analysis ? fmtNodes(analysis.nodes) : '-';
+      $('graphTitle').textContent = 'Wolf win rate by ply';
+      if (!Engine.busy() && !reviewing) $('engineState').textContent = analysis ? 'done' : ($('analysisOn').checked ? '' : 'analysis off');
+    }
+    $('lambCount').textContent = 'lambs ' + s.lambs + ' · ' + s.turnsSinceCapture + ' turns since capture';
+  }
+
+  function renderCandidates() {
+    const box = $('candBox'), s = cur();
+    box.innerHTML = '';
+    if (E.result(s)) { box.innerHTML = '<div class="empty">Game over.</div>'; return; }
+    const ox = oracle[cursor];
+    if (exactMode()) {
+      if (!ox || !ox.moves.length) { box.innerHTML = '<div class="empty">Looking up the tables…</div>'; return; }
+      const tbl = document.createElement('table'); tbl.className = 'cands';
+      tbl.innerHTML = '<thead><tr><th>#</th><th>Move</th><th>Exact</th><th>Opponent blunders</th><th>Best play after it</th></tr></thead>';
+      const tb = document.createElement('tbody');
+      exactOrder(ox.moves, s.side).slice(0, Math.max(+$('topN').value, 5)).forEach((o, k) => {
+        const em = { from: o.from, to: o.to, capture: o.capture ? o.to : null }, id = o.from | (o.to << 5);
+        const line = exactLineFor(cursor, em);
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + (k + 1) + '</td><td><span class="sw" style="background:' + exactColor(o.winner, s.side) + '"></span>' + E.describeMove(em) + '</td>' +
+          '<td class="' + exactClass(o.winner, s.side) + '">' + exactMoveText(o, s.side) + '</td><td>' + repliesText(o) + '</td><td class="pvcell">' + (line ? exactLineText(E.applyMove(s, em), line) : '…') + '</td>';
+        tr.addEventListener('mouseenter', () => { hoverMove = id; renderBoard(); });
+        tr.addEventListener('mouseleave', () => { hoverMove = null; renderBoard(); });
+        tr.addEventListener('click', () => { hoverMove = null; if (!aiControls(s.side) || !atEnd()) playMove(em); });
+        tb.appendChild(tr);
+      });
+      tbl.appendChild(tb); box.appendChild(tbl);
+      return;
+    }
+    if (!analysis || !analysis.moves.length) {
+      box.innerHTML = '<div class="empty">' + ($('analysisOn').checked || aiControls(s.side) ? 'Waiting for the engine…' : 'Analysis is off.') + '</div>';
+      return;
+    }
+    const tbl = document.createElement('table'); tbl.className = 'cands';
+    tbl.innerHTML = '<thead><tr><th>#</th><th>Move</th><th>' + E.sideName(s.side) + ' win</th><th>Eval</th>' + (ox ? '<th>Exact</th>' : '') + '<th>Line</th></tr></thead>';
+    const tb = document.createElement('tbody');
+    const bestWr = moverWr(analysis.moves[0].score);
+    analysis.moves.slice(0, Math.max(+$('topN').value, 5)).forEach((e, k) => {
+      const em = B.toEngineMove(e.move), wr = moverWr(e.score);
+      const tr = document.createElement('tr');
+      const color = candColor((bestWr - wr) * 100, k === 0);
+      const ex = ox ? exactOf(cursor, em) : null;
+      tr.innerHTML = '<td>' + (k + 1) + '</td><td><span class="sw" style="background:' + color + '"></span>' + E.describeMove(em) + '</td>' +
+        '<td>' + pct(wr) + '</td><td>' + scoreText(wolfScore(e.score, s.side)) + '</td>' +
+        (ox ? '<td class="' + (ex ? exactClass(ex.winner, s.side) : '') + '">' + (ex ? exactMoveText(ex, s.side) : '-') + '</td>' : '') +
+        '<td class="pvcell">' + pvText(s, e.pv) + '</td>';
+      tr.addEventListener('mouseenter', () => { hoverMove = e.move; renderBoard(); });
+      tr.addEventListener('mouseleave', () => { hoverMove = null; renderBoard(); });
+      tr.addEventListener('click', () => { hoverMove = null; if (!aiControls(s.side) || !atEnd()) playMove(em); });
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb); box.appendChild(tbl);
+  }
+  function pvText(s, pv) {
+    const out = []; let st = s;
+    for (const pm of pv) {
+      const em = B.toEngineMove(pm);
+      if (!E.isLegal(st, em)) break;
+      out.push(E.describeMove(em)); st = E.applyMove(st, em);
+      if (out.length >= 6) break;
+    }
+    return out.join(' ');
+  }
+
+  function renderMoves() {
+    const box = $('moves'); box.innerHTML = '';
+    const s = history[history.length - 1];
+    for (let k = 0; k < s.moves.length; k += 2) {
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = (k / 2 + 1) + '.'; box.appendChild(n);
+      for (let j = k; j < k + 2; j++) {
+        const d = document.createElement('span');
+        if (j < s.moves.length) {
+          const exb = isExactBlunder(j + 1);
+          d.className = 'mv' + (cursor === j + 1 ? ' cur' : '') + (exb ? ' exblunder' : (!exactMode() && isBlunder(j + 1)) ? ' blunder' : '');
+          d.textContent = E.describeMove(s.moves[j]);
+          d.addEventListener('click', () => goTo(j + 1));
+          const ex = oracle[j] ? exactOf(j, s.moves[j]) : null;
+          d.title = (evals[j + 1] ? 'Wolf ' + pct(evals[j + 1].wr) : '') + (ex ? (evals[j + 1] ? ' · ' : '') + 'exact: ' + exactMoveText(ex, history[j].side) : '');
+        }
+        box.appendChild(d);
+      }
+    }
+    const c = box.querySelector('.cur'); if (c) c.scrollIntoView({ block: 'nearest' });
+    $('prev').disabled = $('first').disabled = cursor === 0;
+    $('next').disabled = $('last').disabled = atEnd();
+    $('undo').disabled = history.length < 2;
+    $('aimove').disabled = !!E.result(cur()) || (atEnd() && aiControls(cur().side));
+  }
+  // A move that dropped its side's win rate by 15 points or more, judged from the evals we have.
+  function isBlunder(i) {
+    const a = evals[i - 1], b = evals[i];
+    if (!a || !b) return false;
+    const mover = history[i - 1].side;
+    const drop = mover === E.WOLF ? a.wr - b.wr : b.wr - a.wr;
+    return drop >= 0.15;
+  }
+
+  // ---- win-rate graph ----------------------------------------------------
+  const graphEl = $('graph');
+  const GW = 600, GH = 170, GL = 34, GR = 12, GT = 10, GB = 24;
+  let graphHover = null;
+  function gx(i) { const n = Math.max(history.length - 1, 10); return GL + (GW - GL - GR) * i / n; }
+  function gy(wr) { return GT + (GH - GT - GB) * (1 - wr); }
+  function renderGraph() {
+    graphEl.innerHTML = '';
+    for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+      el('line', { class: v === 0.5 ? 'g-mid' : 'g-grid', x1: GL, x2: GW - GR, y1: gy(v), y2: gy(v) }, graphEl);
+      text(GL - 6, gy(v), Math.round(v * 100) + '%', 'g-txt', graphEl, { 'text-anchor': 'end' });
+    }
+    const n = Math.max(history.length - 1, 10);
+    const step = n <= 20 ? 5 : n <= 60 ? 10 : 20;
+    for (let i = 0; i <= n; i += step) text(gx(i), GH - 8, String(i), 'g-txt', graphEl);
+
+    // line through the known points (gaps where a position has not been analysed yet)
+    const point = i => {
+      if (i < 0 || i >= history.length) return null;
+      if (!exactMode()) return evals[i];
+      const r = E.result(history[i]);
+      if (r) return { wr: r.winner === E.WOLF ? 1 : r.winner === E.LAMB ? 0 : 0.5 };
+      return oracle[i] ? { wr: exactWr(oracle[i].value) } : null;
+    };
+    let d = '', area = '', open = false, lastX = null;
+    for (let i = 0; i < history.length; i++) {
+      const ev = point(i);
+      if (!ev) { if (open) { area += 'L' + lastX + ' ' + gy(0.5) + 'Z'; open = false; } continue; }
+      const x = gx(i), y = gy(ev.wr);
+      if (!open) { d += 'M' + x + ' ' + y; area += 'M' + x + ' ' + gy(0.5) + 'L' + x + ' ' + y; open = true; }
+      else { d += 'L' + x + ' ' + y; area += 'L' + x + ' ' + y; }
+      lastX = x;
+    }
+    if (open) area += 'L' + lastX + ' ' + gy(0.5) + 'Z';
+    if (area) el('path', { class: 'g-area', d: area }, graphEl);
+    if (d) el('path', { class: 'g-line', d }, graphEl);
+    for (let i = 0; i < history.length; i++) if (point(i) && (!point(i - 1) || !point(i + 1) || i === cursor))
+      el('circle', { class: 'g-dot', cx: gx(i), cy: gy(point(i).wr), r: i === cursor ? 4.5 : 2.5 }, graphEl);
+    el('line', { class: 'g-cur', x1: gx(cursor), x2: gx(cursor), y1: GT, y2: GH - GB }, graphEl);
+
+    if (graphHover !== null && graphHover < history.length) {
+      const i = graphHover, ev = point(i);
+      el('line', { class: 'g-grid', x1: gx(i), x2: gx(i), y1: GT, y2: GH - GB, stroke: 'var(--muted)' }, graphEl);
+      const verdict = !ev ? '  not analysed' : exactMode() ? '  ' + (ev.wr === 1 ? 'Wolf wins' : ev.wr === 0 ? 'Lamb wins' : 'Draw') : '  Wolf ' + pct(ev.wr);
+      const label = 'ply ' + i + (i > 0 ? '  ' + E.describeMove(history[i].moves[i - 1]) : '') + verdict;
+      const w = label.length * 6.2 + 12, x = Math.min(Math.max(gx(i) - w / 2, GL), GW - GR - w);
+      el('rect', { class: 'g-tip-bg', x, y: GT, width: w, height: 18 }, graphEl);
+      text(x + w / 2, GT + 9, label, 'g-tip', graphEl);
+    }
+  }
+  function graphIndexFromEvent(ev) {
+    const rect = graphEl.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) / rect.width * GW;
+    const n = Math.max(history.length - 1, 10);
+    return Math.round((x - GL) / (GW - GL - GR) * n);
+  }
+  graphEl.addEventListener('mousemove', ev => { graphHover = Math.max(0, Math.min(history.length - 1, graphIndexFromEvent(ev))); renderGraph(); });
+  graphEl.addEventListener('mouseleave', () => { graphHover = null; renderGraph(); });
+  graphEl.addEventListener('click', ev => goTo(graphIndexFromEvent(ev)));
+
+  function render() { renderBoard(); renderStatus(); renderCandidates(); renderMoves(); renderGraph(); }
+
+  // ---- controls ----------------------------------------------------------
+  $('first').addEventListener('click', () => goTo(0));
+  $('prev').addEventListener('click', () => goTo(cursor - 1));
+  $('next').addEventListener('click', () => goTo(cursor + 1));
+  $('last').addEventListener('click', () => goTo(history.length - 1));
+  $('undo').addEventListener('click', () => {
+    if (history.length < 2) return;
+    history.pop(); evals.pop(); oracle.pop();
+    // In human-vs-AI, also take back the AI's reply so the human is to move again.
+    while (history.length > 1 && $('mode').value !== 'aa' && $('mode').value !== 'hh' && aiControls(history[history.length - 1].side)) { history.pop(); evals.pop(); oracle.pop(); }
+    cursor = history.length - 1; selected = null; schedule();
+  });
+  $('reset').addEventListener('click', () => { history = [E.initialState()]; evals = [null]; oracle = [null]; cursor = 0; selected = null; schedule(); });
+  $('aimove').addEventListener('click', () => {
+    if (E.result(cur())) return;
+    if (!atEnd()) { history = history.slice(0, cursor + 1); evals = evals.slice(0, cursor + 1); oracle = oracle.slice(0, cursor + 1); }
+    clearTimeout(aiTimer); Engine.abort(); stopReview(); analysis = null; render();
+    startPlay(cursor);
+  });
+  $('mode').addEventListener('change', () => { selected = null; schedule(); });
+  $('aiTime').addEventListener('change', () => { if (Engine.busy() && atEnd() && aiControls(cur().side)) schedule(); });
+  $('analysisOn').addEventListener('change', schedule);
+  $('anaTime').addEventListener('change', schedule);
+  $('topN').addEventListener('change', render);
+
+  document.addEventListener('keydown', ev => {
+    if (ev.target.tagName === 'SELECT' || ev.target.tagName === 'INPUT') return;
+    if (ev.key === 'ArrowLeft') { goTo(cursor - 1); ev.preventDefault(); }
+    else if (ev.key === 'ArrowRight') { goTo(cursor + 1); ev.preventDefault(); }
+    else if (ev.key === 'Home') { goTo(0); ev.preventDefault(); }
+    else if (ev.key === 'End') { goTo(history.length - 1); ev.preventDefault(); }
+  });
+
+  // ---- record import / export --------------------------------------------
+  function recordText() { return history[history.length - 1].moves.map(E.describeMove).join(', '); }
+  $('copy').addEventListener('click', () => {
+    const t = recordText();
+    if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => { $('reviewState').textContent = 'record copied'; }, () => prompt('Game record:', t));
+    else prompt('Game record:', t);
+  });
+  $('load').addEventListener('click', () => {
+    const t = prompt('Paste a move list, e.g. (1,3) x (3,3), (3,2) -> (2,2)');
+    if (!t) return;
+    const re = /\((\d),(\d)\)\s*(->|x)\s*\((\d),(\d)\)/g;
+    let s = E.initialState(), h = [s], m;
+    while ((m = re.exec(t))) {
+      const from = E.idx(+m[1], +m[2]), to = E.idx(+m[4], +m[5]);
+      const mv = { from, to, capture: m[3] === 'x' ? to : null };
+      if (!E.isLegal(s, mv)) { alert('Illegal move in record: ' + E.describeMove(mv) + ' at ply ' + h.length); return; }
+      s = E.applyMove(s, mv); h.push(s);
+    }
+    history = h; evals = h.map(() => null); oracle = h.map(() => null); cursor = history.length - 1; selected = null;
+    terminalEval(cursor);
+    schedule();
+    ensureAllOracle();
+  });
+
+  Oracle.check().then(() => { ensureAllOracle(); schedule(); });
+  schedule();
+})();
+</script>
+</body>
+</html>

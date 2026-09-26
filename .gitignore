@@ -1,0 +1,14 @@
+# solved tables (5 GB per rule set): rebuild with solver/solve, see SOLUTION.md
+solver/tables/
+solver/tables_noclock/
+# compiled solver binaries and run logs
+solver/solve
+solver/solve_noclock
+solver/*_log.txt
+solver/*_result.txt
+# LaTeX build artifacts
+paper/*.aux
+paper/*.log
+paper/*.out
+# OS
+.DS_Store
