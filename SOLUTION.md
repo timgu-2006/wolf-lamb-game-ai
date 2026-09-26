@@ -166,3 +166,24 @@ squeezes in the middle layers into wins: 15-lamb draws fall from 22,738 to
 | `solver/tables.js` | lookup and best-move listing. Move choice everywhere: fastest win by D; in drawn positions the drawing move that gives a uniformly random opponent the highest probability of being lost within three of their moves (we answer optimally), one-move fraction as tie-break; otherwise the slowest loss by D |
 | `solver/play.js` | `line` prints best play from the start; `play wolf|lamb` plays against the tables |
 | `solver/server.js` | `node solver/server.js` serves lookups on localhost:8787 for `index.html`: exact value, plies to the end of every move, exact best lines, exact-blunder marks, perfect AI play |
+
+## 6. Practical play from the drawn start
+
+Perfect play only guarantees the draw; to win, the table player picks, among
+value-preserving moves, the one after which a *modelled* opponent is most likely
+to throw away value within three of its moves (wolves are assumed to prefer
+captures 8:1, lambs to rescue threatened lambs, avoid hanging lambs and squeeze
+the wolves; constants in `solver/tables.js`). In lost positions the same measure
+ranks swindles. `node solver/practical.js` plays 60 games per pairing from the
+start:
+
+| table side | opponent | no traps | uniform-opponent traps | modelled-opponent traps |
+|---|---|---|---|---|
+| Lamb | greedy wolf (always captures) | 60-0-0 | 60-0-0 | 60-0-0 |
+| Lamb | engine wolf, depth 6 | 21-39-0 | 60-0-0 | 60-0-0 |
+| Lamb | engine wolf, 0.3 s | 59-1-0 | 60-0-0 | 60-0-0 |
+| Wolf | careful lamb (covers threats, else engine) | 8-52-0 | 10-50-0 | 60-0-0 |
+| Wolf | engine lamb, depth 6 | 5-55-0 | 60-0-0 | 60-0-0 |
+
+(wins-draws-losses for the table side; opponents are largely deterministic, so
+the 60 games of a pairing are not independent samples.)

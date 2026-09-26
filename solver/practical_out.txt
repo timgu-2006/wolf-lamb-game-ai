@@ -1,3 +1,21 @@
 
 == table player ranking: plain
   table LAMB vs greedy wolf (always captures, else max mobility) win  60  draw   0  loss   0
+  table LAMB vs engine wolf depth 6                              win  21  draw  39  loss   0
+  table LAMB vs engine wolf 0.3 s                                win  59  draw   1  loss   0
+  table WOLF vs careful lamb (block threats, else engine d4)     win   8  draw  52  loss   0
+  table WOLF vs engine lamb depth 6                              win   5  draw  55  loss   0
+
+== table player ranking: uniform
+  table LAMB vs greedy wolf (always captures, else max mobility) win  60  draw   0  loss   0
+  table LAMB vs engine wolf depth 6                              win  60  draw   0  loss   0
+  table LAMB vs engine wolf 0.3 s                                win  60  draw   0  loss   0
+  table WOLF vs careful lamb (block threats, else engine d4)     win  10  draw  50  loss   0
+  table WOLF vs engine lamb depth 6                              win  60  draw   0  loss   0
+
+== table player ranking: model
+  table LAMB vs greedy wolf (always captures, else max mobility) win  60  draw   0  loss   0
+  table LAMB vs engine wolf depth 6                              win  60  draw   0  loss   0
+  table LAMB vs engine wolf 0.3 s                                win  60  draw   0  loss   0
+  table WOLF vs careful lamb (block threats, else engine d4)     win  60  draw   0  loss   0
+  table WOLF vs engine lamb depth 6                              win  60  draw   0  loss   0
