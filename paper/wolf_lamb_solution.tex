@@ -189,7 +189,7 @@ over the plain rules; all agreed.
 \begin{center}\footnotesize
 \begin{tabular}{@{}rrrrrrrr@{}}
 \toprule
-lambs & entries & wolf wins & lamb wins & draws & longest wolf win & longest lamb win & longest game \\
+lambs & entries & wolf wins & lamb wins & draws & $\max T_{\W}$ & $\max T_{\Lb}$ & $\max D$ \\
 \midrule
 4  & 4\,666\,970   & 4\,631\,731  & 165         & 35\,074      & 50 & 3   & 50 \\
 5  & 16\,801\,092  & 16\,190\,699 & 2\,919       & 607\,474     & 88 & 23  & 106 \\
@@ -206,9 +206,9 @@ lambs & entries & wolf wins & lamb wins & draws & longest wolf win & longest lam
 \end{tabular}
 \end{center}
 
-``Longest win'' is the largest $T$ in the layer, in plies to the next capture or
+$\max T$ is the longest forced exit in the layer, in plies to the next capture or
 the end of the game; lamb wins needing more than 100 plies in layers 8 to 10 are
-draws under the rules. ``Longest game'' is the largest $D$. The wolves' wins are short tactical ones and vanish
+draws under the rules. $\max D$ is the longest game. The wolves' wins are short tactical ones and vanish
 entirely above 13 lambs; the lambs' wins are long squeezes.
 
 \paragraph{The opening.} With the wolves to move at the start:
@@ -236,12 +236,15 @@ lambs remain and neither side can make progress.
 
 \section*{Files}
 
-\texttt{solver/solve.c} is the solver (\texttt{cc -O3 -o solver/solve
-solver/solve.c -lpthread}, then \texttt{solver/solve 15 12}); \texttt{solver/dist.c}
-computes $D$ and $S$; \texttt{solver/verify.js} and \texttt{solver/verify\_dist.js}
-are the independent checkers; \texttt{solver/spotcheck.js}
+\begin{sloppypar}
+\texttt{solver/solve.c} is the solver, built with
+\texttt{cc -O3 -o solver/solve solver/solve.c -lpthread} and run as
+\texttt{solver/solve 15 12}; \texttt{solver/dist.c} computes $D$ and $S$;
+\texttt{solver/verify.js} and \texttt{solver/verify\_dist.js} are the
+independent checkers; \texttt{solver/spotcheck.js}
 the brute-force comparison; \texttt{solver/play.js} prints best play or plays
 against the tables; \texttt{solver/server.js} feeds exact values to the web
 board. The rules are transcribed in \texttt{engine.js} from \texttt{SPEC.md}.
+\end{sloppypar}
 
 \end{document}
