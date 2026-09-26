@@ -12,3 +12,5 @@ paper/*.log
 paper/*.out
 # OS
 .DS_Store
+solver/rules_games_*.txt
+solver/pipeline_log.txt
