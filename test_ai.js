@@ -40,11 +40,11 @@ function safeMoves(s, depth) {
 const cases = [
   {
     name: 'lambs close a corner trap in 1',
-    s: custom([[1,1],[1,2],[2,1]], [[1,3],[2,2],[4,1]], E.LAMB), depth: 3, expect: 1,
+    s: custom([[1,1],[1,2],[2,1]], [[1,3],[2,2],[4,1],[5,5]], E.LAMB), depth: 3, expect: 1,
   },
   {
-    name: 'wolf wins by capturing down to 2 lambs',
-    s: custom([[3,3],[1,1],[5,5]], [[3,5],[1,5],[5,1]], E.WOLF), depth: 3, expect: 1,
+    name: 'wolf wins by capturing down to 3 lambs',
+    s: custom([[3,3],[1,1],[5,5]], [[3,5],[1,5],[5,1],[5,3]], E.WOLF), depth: 3, expect: 1,
   },
   {
     name: 'lambs trap three wolves along the top edge in 2',

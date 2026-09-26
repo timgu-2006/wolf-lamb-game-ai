@@ -20,7 +20,8 @@
 
 Wolf and Lamb on the $5\times5$ board, with three wolves against fifteen lambs,
 is a \textbf{draw} with best play. Every position of the game was computed and
-independently checked. Only one of the eight opening moves keeps the draw: the
+independently checked, and for every won position the exact number of plies to
+the end of the game is known. Only one of the eight opening moves keeps the draw: the
 wolf capturing the central lamb, $(1,3)\times(3,3)$. Every other first move loses.
 With 14 or 15 lambs on the board the wolves cannot win from any position, and
 99.98\,\% of 15-lamb positions are lamb wins; the starting position is one of the
@@ -34,7 +35,7 @@ Cells are $(r,c)$, rows and columns from 1 to 5. Wolves start on
 $(1,2),(1,3),(1,4)$; lambs fill rows 3 to 5. Wolves move first. A piece steps to an
 orthogonally adjacent empty cell. A wolf may instead jump over one empty cell in a
 straight line onto a lamb, which is removed; capturing is optional. A side with no
-legal move loses. The wolves win when fewer than three lambs remain. It is a draw
+legal move loses. The wolves win as soon as only three lambs remain. It is a draw
 after 100 plies without a capture, or on a threefold repetition.
 
 \section*{How many positions}
@@ -42,7 +43,7 @@ after 100 plies without a capture, or on a threefold repetition.
 A position is the set of wolf cells, the set of lamb cells, and the side to move.
 Since lambs are only ever removed, positions with $k$ lambs (a \emph{layer}) lead
 only to layers $k$ and $k-1$. The game was therefore solved one layer at a time,
-from $k=3$ up to $k=15$; layers with fewer than three lambs are wolf wins by rule.
+from $k=4$ up to $k=15$; layers with three or fewer lambs are wolf wins by rule.
 
 The rules are the same after any rotation or reflection of the board, so
 positions that are mirror images share one table entry. The 2300 possible wolf
@@ -50,8 +51,8 @@ placements fall into 319 symmetry classes, and each layer stores
 \[
 N_k = 319 \cdot \binom{22}{k} \cdot 2
 \]
-entries (the 2 is the side to move), in total 2.6 billion entries, 5.2\,GB on disk,
-each holding the value of the position and a distance.
+entries (the 2 is the side to move), in total 2.6 billion entries, each holding
+the value of the position and two distances (15\,GB on disk).
 
 \section*{The exact formula}
 
@@ -109,6 +110,29 @@ won. So $X$ wins with $c$ plies already on the clock exactly when
 $T_X(s)\le 100-c$, and \eqref{eq:V} is the value with a fresh clock, which is the
 situation at the start of the game and after every capture.
 
+\section*{Distance to the end of the game}
+
+$T_X$ counts plies only to the next capture. For every won position a second
+program also computes the number of plies until the game actually ends,
+\[
+D(s)=\begin{cases}
+0 & \text{no legal move},\\
+1+\min_c d(c) & \text{winner to move},\\
+1+\max_c d(c) & \text{loser to move},
+\end{cases}
+\qquad
+d(c)=\begin{cases} D(c) & \text{step},\\ D_{k-1}(c) & \text{capture},\end{cases}
+\]
+with $D_{k-1}(c)=0$ when the capture leaves three lambs. This ignores the
+100-turn clock, so alongside $D$ the program computes $S(s)$, the capture-free
+stretch a $D$-optimal strategy needs (only counting lines whose captures land in
+positions that are themselves exact). Whenever $S(s)$ fits in the remaining
+clock, the $D$-optimal strategy is legal and $D(s)$ is exact under the full
+rules; otherwise the winner has to take a longer route and $D(s)$ is a proven
+lower bound. That happens for $0.38\,\%$ of won positions, nearly all lamb wins
+with 8 to 13 lambs, and for only $2\,260$ of the 98 million won positions with
+15 lambs. The longest forced win in the whole game takes 212 plies.
+
 \section*{How it was computed}
 
 For each layer and each side $X$, equation~\eqref{eq:T} was solved backwards by
@@ -121,7 +145,9 @@ predecessor with the opponent to move keeps a count of its unvalued successors a
 takes value $d+1$ when the last one is valued. A position whose opponent has a
 capture that is \emph{not} an $X$ win can never be forced and is marked as an
 escape. Everything still unvalued after both passes is a draw. The whole
-computation took about twelve minutes.
+computation took about twelve minutes; the distances, computed the same way but
+with captures contributing the lower layer's distance and a distance-ordered
+queue, took another thirty.
 
 \section*{How it was checked}
 
@@ -152,48 +178,51 @@ every labelled win really is a forced win in exactly the stated number of plies
 carry that label with the right distance, because its winning successor is
 already correctly labelled and the conditions leave no other option
 (completeness). What remains is exactly the set of draws. The check passed on all
-2,348,715,942 entries with zero errors, for both the normal tables and the
-tables computed without the 100-turn rule. As a further guard, 3\,000 random
-entries were compared with a brute-force search over the plain rules; all agreed.
+2,347,828,242 entries with zero errors, for both the normal tables and the
+tables computed without the 100-turn rule; the distance tables were checked the
+same way, by induction on $D$ and then on $S$, again with zero errors. As a
+further guard, 3\,000 random entries were compared with a brute-force search
+over the plain rules; all agreed.
 
 \section*{What the tables say}
 
-\begin{center}\small
-\begin{tabular}{@{}rrrrrrr@{}}
+\begin{center}\footnotesize
+\begin{tabular}{@{}rrrrrrrr@{}}
 \toprule
-lambs & entries & wolf wins & lamb wins & draws & longest wolf win & longest lamb win \\
+lambs & entries & wolf wins & lamb wins & draws & longest wolf win & longest lamb win & longest game \\
 \midrule
-3  & 982\,520     & 979\,706    & 7           & 2\,807       & 34 & 1 \\
-5  & 16\,801\,092  & 16\,182\,453 & 2\,919       & 615\,720     & 88 & 23 \\
-7  & 108\,807\,072 & 73\,329\,451 & 802\,636     & 34\,674\,985  & 70 & 99 \\
-8  & 204\,013\,260 & 88\,101\,691 & 8\,814\,216   & 107\,097\,353 & 72 & 159 \\
-9  & 317\,353\,960 & 69\,818\,174 & 53\,921\,205  & 193\,614\,581 & 60 & 113 \\
-10 & 412\,560\,148 & 35\,109\,001 & 176\,467\,067 & 200\,984\,080 & 42 & 113 \\
-11 & 450\,065\,616 & 9\,596\,170  & 322\,390\,318 & 118\,079\,128 & 24 & 55 \\
-12 & 412\,560\,148 & 840\,621    & 371\,557\,736 & 40\,161\,791  & 7  & 43 \\
-13 & 317\,353\,960 & 4\,164      & 309\,017\,226 & 8\,332\,570   & 1  & 48 \\
-14 & 204\,013\,260 & 0          & 203\,094\,682 & 918\,578     & -- & 31 \\
-15 & 108\,807\,072 & 0          & 108\,784\,334 & 22\,738      & -- & 24 \\
+4  & 4\,666\,970   & 4\,631\,731  & 165         & 35\,074      & 50 & 3   & 50 \\
+5  & 16\,801\,092  & 16\,190\,699 & 2\,919       & 607\,474     & 88 & 23  & 106 \\
+7  & 108\,807\,072 & 73\,454\,103 & 802\,636     & 34\,550\,333  & 70 & 99  & 148 \\
+8  & 204\,013\,260 & 88\,208\,850 & 8\,814\,216   & 106\,990\,194 & 72 & 159 & 162 \\
+9  & 317\,353\,960 & 69\,860\,851 & 53\,921\,205  & 193\,571\,904 & 60 & 113 & 190 \\
+10 & 412\,560\,148 & 35\,122\,520 & 176\,467\,067 & 200\,970\,561 & 42 & 113 & 197 \\
+11 & 450\,065\,616 & 9\,600\,185  & 322\,390\,318 & 118\,075\,113 & 24 & 55  & 211 \\
+12 & 412\,560\,148 & 841\,061    & 371\,557\,736 & 40\,161\,351  & 7  & 43  & 212 \\
+13 & 317\,353\,960 & 4\,168      & 309\,017\,226 & 8\,332\,566   & 1  & 48  & 208 \\
+14 & 204\,013\,260 & 0          & 203\,094\,682 & 918\,578     & -- & 31  & 210 \\
+15 & 108\,807\,072 & 0          & 108\,784\,334 & 22\,738      & -- & 24  & 210 \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 ``Longest win'' is the largest $T$ in the layer, in plies to the next capture or
 the end of the game; lamb wins needing more than 100 plies in layers 8 to 10 are
-draws under the rules. The wolves' wins are short tactical ones and vanish
+draws under the rules. ``Longest game'' is the largest $D$. The wolves' wins are short tactical ones and vanish
 entirely above 13 lambs; the lambs' wins are long squeezes.
 
 \paragraph{The opening.} With the wolves to move at the start:
 
-\begin{center}
+\begin{center}\small
 \begin{tabular}{@{}ll@{}}
 \toprule
 wolf move & value \\
 \midrule
 $(1,3)\times(3,3)$ & \textbf{draw} \\
-$(1,2)\times(3,2)$, $(1,4)\times(3,4)$ & lambs win, forced exit within 24 plies \\
-$(1,2)\to(2,2)$, $(1,3)\to(2,3)$, $(1,4)\to(2,4)$ & lambs win within 20 plies \\
-$(1,2)\to(1,1)$, $(1,4)\to(1,5)$ & lambs win within 18 plies \\
+$(1,2)\times(3,2)$, $(1,4)\times(3,4)$ & lambs win in 40 plies \\
+$(1,2)\to(1,1)$, $(1,4)\to(1,5)$ & lambs win in 38 plies \\
+$(1,2)\to(2,2)$, $(1,4)\to(2,4)$ & lambs win in 36 plies \\
+$(1,3)\to(2,3)$ & lambs win in 72 plies \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -208,8 +237,9 @@ lambs remain and neither side can make progress.
 \section*{Files}
 
 \texttt{solver/solve.c} is the solver (\texttt{cc -O3 -o solver/solve
-solver/solve.c -lpthread}, then \texttt{solver/solve 15 12});
-\texttt{solver/verify.js} the independent checker; \texttt{solver/spotcheck.js}
+solver/solve.c -lpthread}, then \texttt{solver/solve 15 12}); \texttt{solver/dist.c}
+computes $D$ and $S$; \texttt{solver/verify.js} and \texttt{solver/verify\_dist.js}
+are the independent checkers; \texttt{solver/spotcheck.js}
 the brute-force comparison; \texttt{solver/play.js} prints best play or plays
 against the tables; \texttt{solver/server.js} feeds exact values to the web
 board. The rules are transcribed in \texttt{engine.js} from \texttt{SPEC.md}.

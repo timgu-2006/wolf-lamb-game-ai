@@ -6,8 +6,10 @@
  *
  *   GET /health
  *   GET /eval?w=<wolf mask>&l=<lamb mask>&side=<1 wolf|2 lamb>&clock=<plies since capture>
- *     -> { value: {winner, t}, moves: [{from, to, capture, winner, t, replies}] }
+ *     -> { value: {winner, t, d, dExact}, moves: [{from, to, capture, winner, t, d, dExact, replies, blunder}] }
  *        winner: 1 wolf, 2 lamb, 3 draw. t: plies to the winner's next capture or the end.
+ *        d: plies to the end of the game with best play; dExact: whether d is exact under
+ *        the 100-turn rule from here (else it is a lower bound).
  *        replies: {n, oppWins, draws, oppLoses} = how the opponent's answers to that
  *        move are valued for the opponent (null when the move ends the game).
  *        blunder: for drawing moves, the probability that a uniformly random
@@ -26,7 +28,7 @@ const TB = require(path.join(__dirname, 'tables.js'));
 
 const port = +(process.argv[2] || 8787);
 if (!TB.available()) {
-  console.error(`tables not found in ${TB.TABLES} (need layer_3.bin .. layer_15.bin). Build them with solver/solve first.`);
+  console.error(`tables not found in ${TB.TABLES} (need layer_4.bin .. layer_15.bin). Build them with solver/solve first.`);
   process.exit(1);
 }
 
@@ -36,13 +38,13 @@ function send(res, code, obj) {
 }
 
 const DEPTH = 3;   // opponent moves considered by the blunder probability
-function moveObj(o) { return { from: B.moveFrom(o.move), to: B.moveTo(o.move), capture: !!o.capture, winner: o.winner, t: o.t, replies: o.replies, blunder: o.blunder }; }
+function moveObj(o) { return { from: B.moveFrom(o.move), to: B.moveTo(o.move), capture: !!o.capture, winner: o.winner, t: o.t, d: o.d, dExact: o.dExact, replies: o.replies, blunder: o.blunder }; }
 
 /* best play from p for up to n plies: winner fastest, loser slowest, draws set the biggest trap (and avoid repeating) */
 function bestLine(p, n) {
   const line = [], seen = new Set([B.key(p)]);
   for (let i = 0; i < n; i++) {
-    if (B.popcount(p.lambs) < 3 || B.terminal(p) !== -1) break;
+    if (B.popcount(p.lambs) < 4 || B.terminal(p) !== -1) break;
     const opts = TB.bestMoves(p, p.clock, { depth: DEPTH });
     if (!opts.length) break;
     let pick = opts[0];

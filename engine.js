@@ -11,7 +11,7 @@
 
   const N = 5;
   const EMPTY = 0, WOLF = 1, LAMB = 2;
-  const MIN_LAMBS = 3;          // fewer than this -> wolves can never be trapped
+  const MIN_LAMBS = 4;          // fewer than this (3 or fewer lambs) -> wolves win
   const MOVE_LIMIT = 100;       // turns without a capture -> draw
   const REPETITION_LIMIT = 3;   // same position + side to move -> draw
 

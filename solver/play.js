@@ -20,7 +20,9 @@ const NAME = ['', 'WOLF', 'LAMB', 'DRAW'];
 function describe(r, mover) {
   if (r.winner === TB.DRAW) return 'draw' + (r.replies ? ` (opponent lost within 3 moves with probability ${(r.blunder * 100).toFixed(0)}%, ${r.replies.oppLoses} of ${r.replies.n} replies lose at once)` : '');
   const who = r.winner === mover ? 'wins' : 'loses';
-  return `${who}, ${r.winner === TB.WOLF ? 'wolf' : 'lamb'} forces capture/end within ${r.t}`;
+  const side = r.winner === TB.WOLF ? 'wolf' : 'lamb';
+  if (r.d !== undefined) return `${who}: ${side} ends the game in ${r.dExact === false ? 'at least ' : ''}${r.d} plies (next capture/trap within ${r.t})`;
+  return `${who}, ${side} forces capture/trap within ${r.t}`;
 }
 
 /* choose the move the tables recommend: fastest win; else the drawing move that
@@ -33,7 +35,8 @@ function bestMove(s, hist) {
   const p = B.fromState(s);
   const options = TB.bestMoves(p, s.turnsSinceCapture, { depth: 3 });
   const best = options[0];
-  const tied = options.filter(o => o.winner === best.winner && (best.winner === TB.DRAW ? o.blunder === best.blunder : o.t === best.t));
+  const len = o => o.d !== undefined ? o.d : o.t;
+  const tied = options.filter(o => o.winner === best.winner && (best.winner === TB.DRAW ? o.blunder === best.blunder : len(o) === len(best)));
   if (tied.length === 1) return { em: B.toEngineMove(best.move), o: best };
   let pick = null, pickScore = -Infinity;
   for (const o of tied) {
@@ -60,7 +63,7 @@ function printLine(maxPlies) {
     s = E.applyMove(s, em);
     hist.add(B.key(B.fromState(s)));
     const v = TB.lookup(B.fromState(s));
-    console.log(`${String(ply).padStart(3)}. ${E.sideName(s.side === E.WOLF ? E.LAMB : E.WOLF).padEnd(4)} ${E.describeMove(em).padEnd(16)} lambs ${String(s.lambs).padStart(2)}  clock ${String(s.turnsSinceCapture).padStart(3)}  now: ${NAME[v.winner]}${v.winner !== TB.DRAW ? ' T=' + v.t : ''}`);
+    console.log(`${String(ply).padStart(3)}. ${E.sideName(s.side === E.WOLF ? E.LAMB : E.WOLF).padEnd(4)} ${E.describeMove(em).padEnd(16)} lambs ${String(s.lambs).padStart(2)}  clock ${String(s.turnsSinceCapture).padStart(3)}  now: ${NAME[v.winner]}${v.winner !== TB.DRAW ? (v.d !== undefined ? ' ends in ' + v.d : '') + ' (next exit ' + v.t + ')' : ''}`);
     if (em.capture !== null || ply % 10 === 0) console.log(E.toString(s));
   }
   console.log('(line truncated)');

@@ -50,7 +50,7 @@ function canWin(s, X, n) {
 let checked = 0, wins = 0, draws = 0, errors = 0;
 const byLayer = {};
 while (checked < samples) {
-  const k = 3 + Math.floor(rand() * 13);
+  const k = 4 + Math.floor(rand() * 12);
   const cells = [...Array(25).keys()].sort(() => rand() - 0.5);
   let w = 0, l = 0;
   for (let i = 0; i < 3; i++) w |= 1 << cells[i];

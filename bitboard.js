@@ -29,7 +29,7 @@
 
   const N = 5;
   const WOLF = 1, LAMB = 2;
-  const MIN_LAMBS = 3;
+  const MIN_LAMBS = 4;
   const MOVE_LIMIT = 100;
   const ALL = (1 << 25) - 1;
 

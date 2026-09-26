@@ -220,7 +220,7 @@
           <option value="99">all</option>
         </select>
       </div>
-      <div class="hint">Click a piece then a square, or click a candidate badge to play it. Hover a candidate to see its line. <span class="kbd">&larr;</span> <span class="kbd">&rarr;</span> step through moves. Positive eval favours the Wolf side. Start <span class="kbd">node solver/server.js</span> and the page switches to the solved tables: every value shown is the exact game result (W/D/L badges with plies to the next capture or the end), <span class="kbd">??</span> marks a move that changed the exact result, and the engine is only used to break ties.</div>
+      <div class="hint">Click a piece then a square, or click a candidate badge to play it. Hover a candidate to see its line. <span class="kbd">&larr;</span> <span class="kbd">&rarr;</span> step through moves. Positive eval favours the Wolf side. Start <span class="kbd">node solver/server.js</span> and the page switches to the solved tables: every value shown is the exact game result (W/D/L badges with the number of plies until the game ends with best play; \u2265 marks the rare cases where the 100-turn rule forces a longer win than the shortest line), <span class="kbd">??</span> marks a move that changed the exact result, and the engine is only used to break ties.</div>
     </div>
     <div class="panel">
       <details>
@@ -228,7 +228,7 @@
         <ul>
           <li>Wolves move first. Any piece steps one square up, down, left or right into an empty square.</li>
           <li>A wolf may also capture a lamb two squares away in a line if the square between is empty. The wolf jumps onto the lamb.</li>
-          <li>A side with no legal move on its turn loses. Wolves also win when fewer than 3 lambs remain.</li>
+          <li>A side with no legal move on its turn loses. Wolves also win when only 3 lambs remain.</li>
           <li>Threefold repetition or 100 turns without a capture is a draw.</li>
         </ul>
       </details>
@@ -395,15 +395,22 @@
   let oracle = [null];                        // oracle[i] = server answer for history[i]
   function exactClass(winner, mover) { return winner === 3 ? 'ex-draw' : winner === mover ? 'ex-win' : 'ex-loss'; }
   function exactColor(winner, mover) { return winner === 3 ? '#8a8378' : winner === mover ? '#2e9e4f' : '#d9534f'; }
+  // d = plies to the end of the game with best play (exact under the 100-turn rule when dExact);
+  // t = plies to the winner's next capture or trap. Older servers send only t.
   function exactText(v, mover) {
     if (!v) return '-';
     if (v.winner === 3) return 'draw';
-    return (v.winner === E.WOLF ? 'Wolf' : 'Lamb') + ' wins' + (v.t ? ' (' + v.t + ')' : '');
+    const side = v.winner === E.WOLF ? 'Wolf' : 'Lamb';
+    if (typeof v.d === 'number') return side + ' wins in ' + (v.dExact === false ? '\u2265' : '') + v.d + ' plies';
+    return side + ' wins, next capture/trap in ' + v.t;
   }
   function exactMoveText(o, mover) {
     if (o.winner === 3) return 'draw';
-    return (o.winner === mover ? 'win' : 'loss') + ' in ' + o.t;
+    const what = o.winner === mover ? 'win' : 'loss';
+    if (typeof o.d === 'number') return what + ' in ' + (o.dExact === false ? '\u2265' : '') + o.d;
+    return what + ', next capture/trap in ' + o.t;
   }
+  const moveLen = o => typeof o.d === 'number' ? o.d : o.t;
   function exactOf(i, em) {                   // exact outcome of move em from history[i]
     const o = oracle[i]; if (!o) return null;
     return o.moves.find(x => x.from === em.from && x.to === em.to) || null;
@@ -440,7 +447,7 @@
     const o = oracle[i]; if (!o || !o.moves.length) return null;
     const mover = history[i].side, best = o.moves[0];
     let same;
-    if (best.winner === mover) same = o.moves.filter(m => m.winner === mover && m.t === best.t);
+    if (best.winner === mover) same = o.moves.filter(m => m.winner === mover && moveLen(m) === moveLen(best));
     else if (best.winner === 3) {
       const draws = o.moves.filter(m => m.winner === 3);
       const top = Math.max(...draws.map(trapScore));
@@ -448,7 +455,7 @@
       const topNow = Math.max(...cands.map(trapNow));
       same = cands.filter(m => trapNow(m) === topNow);
     } else {
-      const losses = o.moves.filter(m => m.t === best.t);
+      const losses = o.moves.filter(m => m.winner === best.winner && moveLen(m) === moveLen(best));
       const fewest = Math.min(...losses.map(m => m.replies ? m.replies.oppWins : 0));
       same = losses.filter(m => (m.replies ? m.replies.oppWins : 0) === fewest);
     }
@@ -463,9 +470,9 @@
     const rank = m => m.winner === mover ? 2 : m.winner === 3 ? 1 : 0;
     return moves.slice().sort((a, b) => {
       const d = rank(b) - rank(a); if (d) return d;
-      if (a.winner === mover) return a.t - b.t;
+      if (a.winner === mover) return moveLen(a) - moveLen(b);
       if (a.winner === 3) return (trapScore(b) - trapScore(a)) || (trapNow(b) - trapNow(a));
-      return (b.t - a.t) || ((a.replies ? a.replies.oppWins : 0) - (b.replies ? b.replies.oppWins : 0));
+      return (moveLen(b) - moveLen(a)) || ((a.replies ? a.replies.oppWins : 0) - (b.replies ? b.replies.oppWins : 0));
     });
   }
   function repliesText(m) {
@@ -661,7 +668,7 @@
         const bx = cx(m.from) + (cx(m.to) - cx(m.from)) * 0.68, by = cy(m.from) + (cy(m.to) - cy(m.from)) * 0.68;
         el('circle', { class: 'badge', cx: bx, cy: by, r: 21, fill: color }, g);
         text(bx, by - 5, o.winner === 3 ? 'D' : o.winner === s.side ? 'W' : 'L', 'wr', g);
-        text(bx, by + 10, o.winner === 3 ? '' : String(o.t), 'sc', g);
+        text(bx, by + 10, o.winner === 3 ? '' : (o.dExact === false ? '\u2265' : '') + String(moveLen(o)), 'sc', g);
         g.addEventListener('mouseenter', () => { hoverMove = id; renderBoard(); });
         g.addEventListener('mouseleave', () => { hoverMove = null; renderBoard(); });
         g.addEventListener('click', ev => { ev.stopPropagation(); hoverMove = null; if (!aiControls(s.side) || !atEnd()) playMove(m); });

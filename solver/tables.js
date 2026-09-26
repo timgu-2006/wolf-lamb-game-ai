@@ -2,8 +2,14 @@
  * Read access to the solved tables (solver/tables/layer_<k>.bin) from Node.
  *
  *   const TB = require('./solver/tables.js');
- *   TB.lookup(position)          -> { winner: WOLF|LAMB|DRAW, t } for a bitboard.js position (fresh clock)
- *   TB.value(position, clock)    -> same, but a win that does not fit in the remaining clock becomes a draw
+ *   TB.lookup(position)          -> { winner, t, d, s } for a bitboard.js position (fresh clock):
+ *                                   t = plies to the winner's next capture or the end (solve.c),
+ *                                   d = plies to the end of the game with best play (dist.c),
+ *                                   s = capture-free plies the d-optimal strategy may need (dist.c);
+ *                                   d and s are undefined when the distance tables are absent
+ *   TB.value(position, clock)    -> same with the clock applied: a win that does not fit in the
+ *                                   remaining clock becomes a draw; dExact says whether d is exact
+ *                                   under the 100-turn rule (s <= 100 - clock)
  *   TB.bestMoves(position, clock)-> every legal move with its exact outcome for the mover, best first:
  *                                   fastest win, else the draw that gives the opponent the most
  *                                   losing replies, else the slowest loss
@@ -22,33 +28,43 @@ const TABLES = process.env.WL_TABLES ? path.resolve(process.env.WL_TABLES) : pat
 const fds = new Map();
 const two = Buffer.alloc(2);
 
-function fd(k) {
-  if (fds.has(k)) return fds.get(k);
-  const file = path.join(TABLES, `layer_${k}.bin`);
-  const st = fs.statSync(file);
-  if (st.size !== IX.layerSize(k) * 2) throw new Error(`${file}: unexpected size ${st.size}`);
-  const h = fs.openSync(file, 'r');
-  fds.set(k, h);
+function fdOf(name, k) {
+  const key = name + k;
+  if (fds.has(key)) return fds.get(key);
+  const file = path.join(TABLES, `${name}_${k}.bin`);
+  let h = null;
+  try {
+    const st = fs.statSync(file);
+    if (st.size !== IX.layerSize(k) * 2) throw new Error(`${file}: unexpected size ${st.size}`);
+    h = fs.openSync(file, 'r');
+  } catch (e) { if (name === 'layer') throw e; }
+  fds.set(key, h);
   return h;
 }
+function fd(k) { return fdOf('layer', k); }
+function read16(h, idx) { if (fs.readSync(h, two, 0, 2, idx * 2) !== 2) throw new Error('short read'); return two.readUInt16LE(0); }
 
 function available() {
-  try { for (let k = 3; k <= 15; k++) fd(k); return true; } catch (e) { return false; }
+  try { for (let k = 4; k <= 15; k++) fd(k); return true; } catch (e) { return false; }
 }
 
 function lookup(p) {
   const k = B.popcount(p.lambs);
-  if (k < 3) return { winner: WOLF, t: 0 };
+  if (k < 4) return { winner: WOLF, t: 0, d: 0, s: 0 };
   const idx = IX.canonIndex(k, p.wolves, p.lambs, p.side === WOLF ? 0 : 1);
-  if (fs.readSync(fd(k), two, 0, 2, idx * 2) !== 2) throw new Error('short read');
-  const v = two.readUInt16LE(0);
-  return { winner: v >>> 14, t: v & 0x3fff };
+  const v = read16(fd(k), idx);
+  const r = { winner: v >>> 14, t: v & 0x3fff };
+  const hd = fdOf('dist', k), hs = fdOf('seg', k);
+  if (hd && hs && r.winner !== DRAW) { r.d = read16(hd, idx); r.s = read16(hs, idx); }
+  return r;
 }
 
 /* value of a position that already has `clock` plies on the no-capture counter */
 function value(p, clock) {
+  clock = clock || 0;
   const r = lookup(p);
-  if (r.winner !== DRAW && r.t + (clock || 0) > CLOCK) return { winner: DRAW, t: 0 };
+  if (r.winner !== DRAW && r.t + clock > CLOCK) return { winner: DRAW, t: 0 };
+  if (r.winner !== DRAW && r.d !== undefined) r.dExact = r.s + clock <= CLOCK;
   return r;
 }
 
@@ -64,12 +80,15 @@ function outcomes(p, clock) {
     const cap = B.moveIsCapture(m);
     const r = lookup(p);
     B.unmakeMove(p, m, undo);
-    let winner = r.winner, t = r.t;
+    let winner = r.winner, t = r.t, d, dExact;
     if (winner !== DRAW) {
       if (!cap && t + 1 + clock > CLOCK) { winner = DRAW; t = 0; }   // does not fit in the clock
-      else t = t + 1;
+      else {
+        t = t + 1;
+        if (r.d !== undefined) { d = r.d + 1; dExact = r.s + (cap ? 0 : clock + 1) <= CLOCK; }
+      }
     }
-    out.push({ move: m, winner, t, capture: cap });
+    out.push({ move: m, winner, t, d, dExact, capture: cap });
   }
   return out;
 }
@@ -79,7 +98,7 @@ function outcomes(p, clock) {
 function replies(p, o) {
   const undo = B.makeMove(p, o.move);
   let r = null;
-  if (B.popcount(p.lambs) >= 3 && B.terminal(p) === -1) {
+  if (B.popcount(p.lambs) >= 4 && B.terminal(p) === -1) {
     r = { n: 0, oppWins: 0, draws: 0, oppLoses: 0 };
     for (const x of outcomes(p, p.clock)) { r.n++; if (x.winner === DRAW) r.draws++; else if (x.winner === p.side) r.oppWins++; else r.oppLoses++; }
   }
@@ -123,11 +142,12 @@ function blunderProb(c, depth) {
 }
 
 /* Every legal move with its exact outcome for the mover, best first:
- *   winning moves first, fastest win first;
+ *   winning moves first, fastest win first (by d, plies to the end of the game,
+ *   when the distance tables are present, else by t);
  *   then drawing moves, the one after which the largest fraction of opponent
  *   replies lose first (best practical chance);
- *   then losing moves, slowest loss first, then fewest winning replies for the opponent.
- * Each entry: { move, winner, t, capture, replies, blunder }. With opts.depth = d > 1,
+ *   then losing moves, slowest loss first (by d, else t), then fewest winning replies for the opponent.
+ * Each entry: { move, winner, t, d, dExact, capture, replies, blunder }. With opts.depth = d > 1,
  * drawing moves are ranked by blunderProb over d opponent moves (stored in .blunder),
  * with the one-move fraction as tie-break. */
 function bestMoves(p, clock, opts) {
@@ -144,11 +164,12 @@ function bestMoves(p, clock, opts) {
     }
   }
   const score = r => r.winner === mover ? 3 : r.winner === DRAW ? 2 : 1;
+  const len = r => r.d !== undefined ? r.d : r.t;
   out.sort((a, b) => {
     const d = score(b) - score(a); if (d) return d;
-    if (a.winner === mover) return a.t - b.t;
+    if (a.winner === mover) return len(a) - len(b);
     if (a.winner === DRAW) return (b.blunder - a.blunder) || (trap(b) - trap(a));
-    return (b.t - a.t) || ((a.replies ? a.replies.oppWins : 0) - (b.replies ? b.replies.oppWins : 0));
+    return (len(b) - len(a)) || ((a.replies ? a.replies.oppWins : 0) - (b.replies ? b.replies.oppWins : 0));
   });
   return out;
 }

@@ -121,11 +121,9 @@ Any one of:
 
 - (a) **All lambs have been captured.**
 - (b) It is the Lamb side's turn and **no lamb has any legal move.**
-- (c) **Too few lambs remain to ever immobilise all three wolves.** Three wolves
-  always have at least 3 empty-or-lamb neighbouring cells around them (the tightest
-  packing is an L-shape in a corner, which has exactly 3 outside neighbours), so
-  they can never all be blocked by fewer than 3 lambs. Therefore the Wolf side wins
-  as soon as **fewer than 3 lambs remain**.
+- (c) **Three or fewer lambs remain.** The Wolf side wins as soon as the lamb
+  count drops to 3 (rule of the game as played; with three lambs the wolves are
+  considered untrappable in practice).
 
 ### 7.3 Draw
 
@@ -162,7 +160,7 @@ legal_moves(side):
 
 game_over(side_to_move):
   lambs_remaining == 0                 -> WOLF wins
-  lambs_remaining < 3                  -> WOLF wins
+  lambs_remaining <= 3                 -> WOLF wins
   legal_moves(side_to_move) is empty   -> side_to_move loses
   threefold repetition / move limit    -> draw
 ```

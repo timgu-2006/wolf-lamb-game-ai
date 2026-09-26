@@ -33,14 +33,14 @@ assert.ok(m.every(x => x.capture === null && s.board[x.from] === E.LAMB));
 // Illegal move rejected.
 assert.throws(() => E.applyMove(s, { from: I(3, 2), to: I(1, 2), capture: null }));
 
-// Trap: 3 wolves in a corner L blocked by 3 lambs -> lambs win on wolves' turn.
-let t = custom([[1,1,E.WOLF],[1,2,E.WOLF],[2,1,E.WOLF],[1,3,E.LAMB],[2,2,E.LAMB],[3,1,E.LAMB]], E.WOLF, 3);
+// Trap: 3 wolves in a corner L blocked by 3 lambs, a 4th lamb elsewhere -> lambs win on wolves' turn.
+let t = custom([[1,1,E.WOLF],[1,2,E.WOLF],[2,1,E.WOLF],[1,3,E.LAMB],[2,2,E.LAMB],[3,1,E.LAMB],[5,5,E.LAMB]], E.WOLF, 4);
 assert.strictEqual(E.result(t).winner, E.LAMB);
 t.side = E.LAMB;
 assert.strictEqual(E.result(t), null);
 
-// Threshold: fewer than 3 lambs -> wolves win.
-t = custom([[3,3,E.WOLF],[1,1,E.WOLF],[5,5,E.WOLF],[1,5,E.LAMB],[5,1,E.LAMB]], E.LAMB, 2);
+// Threshold: 3 lambs -> wolves win.
+t = custom([[3,3,E.WOLF],[1,1,E.WOLF],[5,5,E.WOLF],[1,5,E.LAMB],[5,1,E.LAMB],[3,1,E.LAMB]], E.LAMB, 3);
 assert.strictEqual(E.result(t).winner, E.WOLF);
 
 // Lambs with no move -> wolves win.

@@ -2,8 +2,8 @@
  * Wolf and Lamb — exact retrograde solver under the full rules of SPEC.md v1.0,
  * including the 100-turn no-capture draw rule and threefold repetition.
  *
- * Layers: a layer is the number of lambs k (3..15). Captures only move down a
- * layer, so layer k needs only layer k-1. Fewer than 3 lambs is a wolf win.
+ * Layers: a layer is the number of lambs k (4..15). Captures only move down a
+ * layer, so layer k needs only layer k-1. Three or fewer lambs is a wolf win.
  *
  * Within a layer, for each side X we compute
  *
@@ -234,7 +234,7 @@ static int X;                /* the side whose T we are computing */
 
 /* is a capture target (layer k-1 state, lamb to move) a win for X? */
 static inline int lowerWin(uint32_t w, uint32_t l) {
-  if (cur.k - 1 < 3) return X == WOLF;
+  if (cur.k - 1 < 4) return X == WOLF;
   return WINNER(prev.val[canonIndex(&prev, w, l, 1)]) == X;
 }
 
@@ -394,8 +394,8 @@ int main(int argc, char **argv) {
   fprintf(stderr, "wolf-triple orbits: %d, threads: %d, clock: %d plies\n", nOrbits, nThreads, CLOCK);
   memset(&prev, 0, sizeof prev); memset(&cur, 0, sizeof cur);
 
-  int start = 3;
-  for (int k = 3; k <= maxLayer; k++) if (loadLayer(k)) { start = k + 1; fprintf(stderr, "layer %2d: loaded from disk\n", k); } else break;
+  int start = 4;
+  for (int k = 4; k <= maxLayer; k++) if (loadLayer(k)) { start = k + 1; fprintf(stderr, "layer %2d: loaded from disk\n", k); } else break;
   for (int k = start; k <= maxLayer; k++) solveLayer(k);
 
   if (prev.val && prev.k == 15) {

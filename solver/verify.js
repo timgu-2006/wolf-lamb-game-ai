@@ -18,7 +18,7 @@
  *   draw          : no child mover-win-within 99, some child not opp-win-within 99
  *
  * By induction on T these conditions pin the labels to the true values (see
- * SOLUTION.md), given that layer k-1 is correct; fewer than 3 lambs is a wolf win.
+ * SOLUTION.md), given that layer k-1 is correct; three or fewer lambs is a wolf win.
  *
  * Usage: node solver/verify.js [minLayer] [maxLayer] [threads]
  */
@@ -83,7 +83,7 @@ function verifyRange(k, tab, lower, tid, nThreads) {
           const undo = B.makeMove(p, m);
           cc[i] = B.moveIsCapture(m);
           if (cc[i]) {
-            if (k - 1 < 3) { cw[i] = WOLF; ct[i] = 0; }
+            if (k - 1 < 4) { cw[i] = WOLF; ct[i] = 0; }
             else { const lv = lower[canonIndex(k - 1, p.wolves, p.lambs, 1)]; cw[i] = lv >>> 14; ct[i] = lv & 0x3fff; }
           } else {
             const sv = tab[canonIndex(k, p.wolves, p.lambs, side ^ 1)]; cw[i] = sv >>> 14; ct[i] = sv & 0x3fff;
@@ -123,7 +123,7 @@ function verifyRange(k, tab, lower, tid, nThreads) {
 function selfTest() {
   let seed = 12345; const rand = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
   for (let it = 0; it < 20000; it++) {
-    const k = 3 + Math.floor(rand() * 13);
+    const k = 4 + Math.floor(rand() * 12);
     const cells = [...Array(25).keys()].sort(() => rand() - 0.5);
     let w = 0, l = 0;
     for (let i = 0; i < 3; i++) w |= 1 << cells[i];
@@ -144,7 +144,7 @@ function selfTest() {
 }
 
 if (isMainThread) {
-  const minLayer = +(process.argv[2] || 3), maxLayer = +(process.argv[3] || 15), nThreads = +(process.argv[4] || 12);
+  const minLayer = +(process.argv[2] || 4), maxLayer = +(process.argv[3] || 15), nThreads = +(process.argv[4] || 12);
   selfTest();
   console.log(`indexing self-test ok (${nOrbits} wolf orbits)`);
   (async () => {
@@ -152,7 +152,7 @@ if (isMainThread) {
     for (let k = minLayer; k <= maxLayer; k++) {
       const t0 = Date.now();
       const tab = loadShared(k);
-      const lower = k - 1 >= 3 ? loadShared(k - 1) : null;
+      const lower = k - 1 >= 4 ? loadShared(k - 1) : null;
       const results = await Promise.all([...Array(nThreads).keys()].map(tid => new Promise((res, rej) => {
         const wk = new Worker(__filename, { workerData: { k, tab, lower, tid, nThreads } });
         wk.on('message', res); wk.on('error', rej);

@@ -1,7 +1,8 @@
 # Wolf and Lamb
 
-A 5×5 asymmetric board game (three wolves vs fifteen lambs), a playable web board
-with a search engine, and a complete, independently verified solution of the game.
+A 5×5 asymmetric board game (three wolves vs fifteen lambs; the wolves win once only
+three lambs remain), a playable web board with a search engine, and a complete,
+independently verified solution of the game including exact distances to the end.
 
 **Result:** with best play the game is a draw. Only one opening move keeps the draw,
 the wolf's central capture. See `SOLUTION.md` and `paper/wolf_lamb_solution.pdf`.
@@ -24,11 +25,13 @@ the wolf's central capture. See `SOLUTION.md` and `paper/wolf_lamb_solution.pdf`
 
 ## Rebuilding the solution
 
-The solved tables are not in the repository (5 GB per rule set). To rebuild:
+The solved tables are not in the repository (15 GB). To rebuild:
 
 ```
 cc -O3 -o solver/solve solver/solve.c -lpthread
 solver/solve 15 12            # about 12 minutes on 12 threads
 node solver/verify.js         # independent verification, zero errors expected
+solver/dist 15 12             # plies-to-end tables, about 30 minutes
+node solver/verify_dist.js
 node solver/server.js         # then open index.html for exact values
 ```
