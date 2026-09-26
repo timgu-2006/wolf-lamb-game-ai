@@ -14,3 +14,7 @@ paper/*.out
 .DS_Store
 solver/rules_games_*.txt
 solver/pipeline_log.txt
+solver/formation_*.txt
+solver/fortress_*.txt
+solver/wolfshape_*.txt
+solver/practical_out.txt

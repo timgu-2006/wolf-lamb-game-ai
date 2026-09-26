@@ -45,7 +45,37 @@ function captureRule(prefer) {                     // prefer: score for a captur
   };
 }
 const dirClass = m => { const f = B.moveFrom(m), t = B.moveTo(m); return t === f - 10 ? 3 : t === f + 10 ? 2 : 1; };   // up (toward row 1) > down > sideways
+// ---- formation-holding strategies -------------------------------------------
+// Target formation W (3 cells). Capture whenever possible (the capture that leaves the
+// wolves closest to W); otherwise step a wolf toward W; when at W, make the waiting move
+// that stays closest to W. Distance = best assignment of wolves to target cells (Manhattan).
+const cellOf = (r, c) => (r - 1) * 5 + (c - 1);
+function manhattan(a, b) { return Math.abs(Math.floor(a / 5) - Math.floor(b / 5)) + Math.abs(a % 5 - b % 5); }
+function formationDist(w, targets) {
+  const cells = []; for (let i = 0; i < 25; i++) if (w & (1 << i)) cells.push(i);
+  let best = Infinity;
+  const perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+  for (const pm of perms) { let d = 0; for (let i = 0; i < 3; i++) d += manhattan(cells[i], targets[pm[i]]); if (d < best) best = d; }
+  return best;
+}
+function formationRule(targets) {
+  return p => {
+    const ms = legal(p), caps = ms.filter(m => B.moveIsCapture(m));
+    const score = m => { const q = after(p, m); return -100 * formationDist(q.wolves, targets) + wolfMob(q); };
+    if (caps.length) return pick(caps, score);
+    return pick(ms, score);
+  };
+}
+const FORMATIONS = {
+  'hold (3,3),(2,2),(1,4)': [cellOf(3, 3), cellOf(2, 2), cellOf(1, 4)],
+  'hold (3,3),(2,2),(2,4)': [cellOf(3, 3), cellOf(2, 2), cellOf(2, 4)],
+  'hold diagonal (2,2),(3,3),(4,4)': [cellOf(2, 2), cellOf(3, 3), cellOf(4, 4)],
+  'hold (3,3),(1,2),(1,4)': [cellOf(3, 3), cellOf(1, 2), cellOf(1, 4)],
+  'hold (2,3),(3,1),(3,4)': [cellOf(2, 3), cellOf(3, 1), cellOf(3, 4)],
+  'hold (3,3),(1,3),(5,3)': [cellOf(3, 3), cellOf(1, 3), cellOf(5, 3)],
+};
 const WOLF_RULES = {
+  ...Object.fromEntries(Object.entries(FORMATIONS).map(([n, t]) => [n, formationRule(t)])),
   'W2: centre first; capture preferring up, then down, then sideways; ties by mobility; else max mobility':
     captureRule(p => m => dirClass(m) * 1000 + wolfMob(after(p, m)) * 10 - Math.abs(B.moveTo(m) % 5 - 2)),
   'W*: centre first, then capture preferring upward jumps, else max mobility': captureRule(p => m => -row(B.moveTo(m)) * 100 - (B.moveTo(m) % 5 === 0 || B.moveTo(m) % 5 === 4 ? 0 : 1)),
