@@ -154,6 +154,7 @@
         <button id="undo" title="Take back the last move">Undo</button>
         <button id="reset" class="primary">New game</button>
         <button id="setup" title="Edit the position: click squares, drag pieces">Set up</button>
+        <button id="flip" title="Flip the board (F)">Flip</button>
       </div>
       <div id="setupPanel">
         <div class="row">
@@ -248,7 +249,7 @@
           <option value="99">all</option>
         </select>
       </div>
-      <div class="hint">Set up lets you edit the position: click squares to cycle empty → lamb → wolf, drag pieces, then press Done. Click a piece then a square, or click a candidate badge to play it. Hover a candidate to see its line. <span class="kbd">&larr;</span> <span class="kbd">&rarr;</span> step through moves. Positive eval favours the Wolf side. Start <span class="kbd">node solver/server.js</span> and the page switches to the solved tables: every value shown is the exact game result (W/D/L badges with the number of plies until the game ends with best play; \u2265 marks the rare cases where the 100-turn rule forces a longer win than the shortest line), <span class="kbd">??</span> marks a move that changed the exact result, and the engine is only used to break ties.</div>
+      <div class="hint">Set up lets you edit the position: click squares to cycle empty → lamb → wolf, drag pieces, then press Done. Click a piece then a square, or click a candidate badge to play it. Hover a candidate to see its line. <span class="kbd">&larr;</span> <span class="kbd">&rarr;</span> step through moves, <span class="kbd">F</span> flips the board. Positive eval favours the Wolf side. Start <span class="kbd">node solver/server.js</span> and the page switches to the solved tables: every value shown is the exact game result (W/D/L badges with the number of plies until the game ends with best play; \u2265 marks the rare cases where the 100-turn rule forces a longer win than the shortest line), <span class="kbd">??</span> marks a move that changed the exact result, and the engine is only used to break ties.</div>
     </div>
     <div class="panel">
       <details>
@@ -653,7 +654,7 @@
   function cellAt(ev) {
     const p = svgPoint(ev);
     const c = Math.floor((p.x - M) / CELL), r = Math.floor((p.y - M) / CELL);
-    return (r >= 0 && r < 5 && c >= 0 && c < 5) ? r * 5 + c : -1;
+    return (r >= 0 && r < 5 && c >= 0 && c < 5) ? view(r * 5 + c) : -1;
   }
   function finishSetup() {
     const p = setupProblem();
@@ -678,8 +679,11 @@
   // ---- board -------------------------------------------------------------
   const boardEl = $('board');
   const M = 30, CELL = 80;
-  const cx = i => M + (i % 5) * CELL + CELL / 2;
-  const cy = i => M + Math.floor(i / 5) * CELL + CELL / 2;
+  let flipped = false;                        // view the board from the lamb side (rotated 180 degrees)
+  const view = i => flipped ? 24 - i : i;     // logical cell <-> displayed cell (an involution)
+  const cx = i => M + (view(i) % 5) * CELL + CELL / 2;
+  const cy = i => M + Math.floor(view(i) / 5) * CELL + CELL / 2;
+  const coordLabel = k => String(flipped ? 5 - k : k + 1);
   function el(name, attrs, parent) {
     const e = document.createElementNS(NS, name);
     for (const k in attrs) e.setAttribute(k, attrs[k]);
@@ -707,7 +711,7 @@
     boardEl.innerHTML = '';
     boardEl.classList.add('setup');
     for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-      const i = r * 5 + c;
+      const i = view(r * 5 + c);
       const cell = el('rect', { class: 'cell-hit', x: M + c * CELL, y: M + r * CELL, width: CELL, height: CELL, fill: 'transparent' }, boardEl);
       cell.addEventListener('click', () => { if (!drag && Date.now() - lastDrop > 300) setupCycle(i); });
     }
@@ -716,8 +720,8 @@
       el('line', { class: 'grid-line', x1: M + k * CELL, y1: M, x2: M + k * CELL, y2: M + 5 * CELL }, boardEl);
     }
     for (let k = 0; k < 5; k++) {
-      text(M + k * CELL + CELL / 2, M / 2, String(k + 1), 'coord', boardEl);
-      text(M / 2, M + k * CELL + CELL / 2, String(k + 1), 'coord', boardEl);
+      text(M + k * CELL + CELL / 2, M / 2, coordLabel(k), 'coord', boardEl);
+      text(M / 2, M + k * CELL + CELL / 2, coordLabel(k), 'coord', boardEl);
     }
     for (let i = 0; i < 25; i++) {
       const v = setup.board[i];
@@ -766,7 +770,7 @@
 
     // grid
     for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-      const i = r * 5 + c;
+      const i = view(r * 5 + c);
       const cell = el('rect', { x: M + c * CELL, y: M + r * CELL, width: CELL, height: CELL, fill: 'transparent' }, boardEl);
       cell.addEventListener('click', () => onCellClick(i));
       if (last && (last.to === i || last.from === i)) el('rect', { x: M + c * CELL + 2, y: M + r * CELL + 2, width: CELL - 4, height: CELL - 4, rx: 6, fill: 'var(--last)', 'pointer-events': 'none' }, boardEl);
@@ -777,8 +781,8 @@
       el('line', { class: 'grid-line', x1: M + k * CELL, y1: M, x2: M + k * CELL, y2: M + 5 * CELL }, boardEl);
     }
     for (let k = 0; k < 5; k++) {
-      text(M + k * CELL + CELL / 2, M / 2, String(k + 1), 'coord', boardEl);
-      text(M / 2, M + k * CELL + CELL / 2, String(k + 1), 'coord', boardEl);
+      text(M + k * CELL + CELL / 2, M / 2, coordLabel(k), 'coord', boardEl);
+      text(M / 2, M + k * CELL + CELL / 2, coordLabel(k), 'coord', boardEl);
     }
     // selection and targets
     if (selected !== null) el('circle', { class: 'sel-ring', cx: cx(selected), cy: cy(selected), r: 34 }, boardEl);
@@ -1104,6 +1108,7 @@
     clearTimeout(aiTimer); Engine.abort(); stopReview(); analysis = null; render();
     startPlay(cursor);
   });
+  $('flip').addEventListener('click', () => { flipped = !flipped; renderBoard(); });
   $('mode').addEventListener('change', () => { selected = null; schedule(); });
   $('aiTime').addEventListener('change', () => { if (Engine.busy() && atEnd() && aiControls(cur().side)) schedule(); });
   $('analysisOn').addEventListener('change', schedule);
@@ -1111,7 +1116,9 @@
   $('topN').addEventListener('change', render);
 
   document.addEventListener('keydown', ev => {
-    if (ev.target.tagName === 'SELECT' || ev.target.tagName === 'INPUT' || setup) return;
+    if (ev.target.tagName === 'SELECT' || ev.target.tagName === 'INPUT') return;
+    if (setup && ev.key !== 'f' && ev.key !== 'F') return;
+    if (ev.key === 'f' || ev.key === 'F') { flipped = !flipped; renderBoard(); ev.preventDefault(); return; }
     if (ev.key === 'ArrowLeft') { goTo(cursor - 1); ev.preventDefault(); }
     else if (ev.key === 'ArrowRight') { goTo(cursor + 1); ev.preventDefault(); }
     else if (ev.key === 'Home') { goTo(0); ev.preventDefault(); }
