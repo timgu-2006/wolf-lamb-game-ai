@@ -12,8 +12,10 @@
  *        the 100-turn rule from here (else it is a lower bound).
  *        replies: {n, oppWins, draws, oppLoses} = how the opponent's answers to that
  *        move are valued for the opponent (null when the move ends the game).
- *        blunder: for drawing moves, the probability that a uniformly random
- *        opponent is lost within 3 of their moves (we answer optimally).
+ *        blunder: for drawing and losing moves, the probability that a modelled
+ *        opponent (wolves love captures, lambs rescue threatened lambs and avoid
+ *        hanging them) throws away value within 3 of their moves, we answering
+ *        optimally; blunderUniform is the same for a uniformly random opponent.
  *   GET /line?w=&l=&side=&clock=&from=<cell>&to=<cell>&n=<plies>
  *     -> { line: [{from, to, capture}] }  best play after that move (winner fastest,
  *        loser slowest, draws avoid repeating), at most n plies
@@ -38,7 +40,7 @@ function send(res, code, obj) {
 }
 
 const DEPTH = 3;   // opponent moves considered by the blunder probability
-function moveObj(o) { return { from: B.moveFrom(o.move), to: B.moveTo(o.move), capture: !!o.capture, winner: o.winner, t: o.t, d: o.d, dExact: o.dExact, replies: o.replies, blunder: o.blunder }; }
+function moveObj(o) { return { from: B.moveFrom(o.move), to: B.moveTo(o.move), capture: !!o.capture, winner: o.winner, t: o.t, d: o.d, dExact: o.dExact, replies: o.replies, blunder: o.blunder, blunderUniform: o.blunderUniform }; }
 
 /* best play from p for up to n plies: winner fastest, loser slowest, draws set the biggest trap (and avoid repeating) */
 function bestLine(p, n) {

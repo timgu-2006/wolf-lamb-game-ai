@@ -10,9 +10,11 @@
  *   TB.value(position, clock)    -> same with the clock applied: a win that does not fit in the
  *                                   remaining clock becomes a draw; dExact says whether d is exact
  *                                   under the 100-turn rule (s <= 100 - clock)
- *   TB.bestMoves(position, clock)-> every legal move with its exact outcome for the mover, best first:
- *                                   fastest win, else the draw that gives the opponent the most
- *                                   losing replies, else the slowest loss
+ *   TB.bestMoves(position, clock, {depth})
+ *                                -> every legal move with its exact outcome for the mover, best first:
+ *                                   fastest win; else the draw (or, if lost, the move) after which a
+ *                                   modelled opponent is most likely to throw away value within
+ *                                   `depth` of their moves; then slowest loss
  *
  * Entries are read with positional reads (pread), so no table is loaded into
  * memory; a lookup costs one small read. The indexing is solver/indexing.js.
@@ -109,33 +111,67 @@ function replies(p, o) {
 /* fraction of the opponent's replies that lose for the opponent (the "trap" value of a move) */
 function trap(o) { return o.replies && o.replies.n ? o.replies.oppLoses / o.replies.n : 0; }
 
-/* Blunder probability with a horizon: after our move into a drawn position c
- * (opponent to move), the probability that an opponent who picks uniformly among
- * legal replies is lost within `depth` of their moves, when we always answer with
- * the drawing move that maximises the same quantity. depth 1 equals trap(). */
+/* ---- opponent model ------------------------------------------------------
+ * How a realistic (not perfect, not uniformly random) opponent chooses among
+ * their legal replies. Weights are relative probabilities. Wolves love
+ * captures; lambs rescue threatened lambs, avoid hanging lambs, and like to
+ * squeeze the wolves. The weights are deliberately simple and exposed here.
+ */
+const MODEL = {
+  wolfCapture: 8,        // a wolf reply that captures, relative to a plain step
+  lambHangs: 0.2,        // a lamb reply that leaves a lamb capturable
+  lambRescues: 4,        // a lamb reply that reduces the number of capturable lambs
+  lambSqueezes: 1.5,     // a lamb reply that reduces the wolves' mobility
+};
+function replyWeight(c, r) {
+  // c: position with the opponent to move; r: one of their outcomes (before the move is made)
+  if (c.side === WOLF) return r.capture ? MODEL.wolfCapture : 1;
+  const before = B.popcount(B.threatenedLambs(c)), wm = B.mobility(c, WOLF);
+  const undo = B.makeMove(c, r.move);
+  const after = B.popcount(B.threatenedLambs(c)), wm2 = B.mobility(c, WOLF);
+  B.unmakeMove(c, r.move, undo);
+  let w = 1;
+  if (after > 0) w *= MODEL.lambHangs;
+  if (after < before) w *= MODEL.lambRescues;
+  if (wm2 < wm) w *= MODEL.lambSqueezes;
+  return w;
+}
+
+/* Blunder probability with a horizon: after our move into position c (opponent
+ * to move), the probability that an opponent who picks replies with the weights
+ * above makes a value-losing move within `depth` of their moves, when we always
+ * answer with the value-preserving move that maximises the same quantity.
+ * Works from drawn positions (they lose the draw) and from positions we are
+ * losing (they throw the win away). uniform = true uses a uniform opponent. */
 const memo = new Map();
-function blunderProb(c, depth) {
-  const k = B.key(c) + ':' + c.clock + ':' + depth;
+function rankFor(side, winner) { return winner === side ? 2 : winner === DRAW ? 1 : 0; }
+function blunderProb(c, depth, uniform) {
+  const k = B.key(c) + ':' + c.clock + ':' + depth + (uniform ? 'u' : 'm');
   if (memo.has(k)) return memo.get(k);
   const opp = c.side, us = 3 - opp;
+  const oppValue = rankFor(opp, value(c, c.clock).winner);
   const rs = outcomes(c, c.clock);
-  let sum = 0;
+  let sum = 0, wsum = 0;
   for (const r of rs) {
-    if (r.winner === us) { sum += 1; continue; }
-    if (r.winner !== DRAW || depth <= 1) continue;
+    const w = uniform ? 1 : replyWeight(c, r);
+    wsum += w;
+    if (rankFor(opp, r.winner) < oppValue) { sum += w; continue; }     // they threw away value
+    if (depth <= 1) continue;
     const undo = B.makeMove(c, r.move);
+    const ourValue = rankFor(us, value(c, c.clock).winner);
     let best = 0;
     for (const m of outcomes(c, c.clock)) {
-      if (m.winner !== DRAW) continue;
+      if (rankFor(us, m.winner) < ourValue) continue;                     // keep our own value
+      if (ourValue === 2) continue;                                       // we are winning: no trap needed
       const u2 = B.makeMove(c, m.move);
-      const v = blunderProb(c, depth - 1);
+      const v = blunderProb(c, depth - 1, uniform);
       B.unmakeMove(c, m.move, u2);
       if (v > best) best = v;
     }
     B.unmakeMove(c, r.move, undo);
-    sum += best;
+    sum += w * best;
   }
-  const res = rs.length ? sum / rs.length : 0;
+  const res = wsum ? sum / wsum : 0;
   if (memo.size > 2000000) memo.clear();
   memo.set(k, res);
   return res;
@@ -156,10 +192,12 @@ function bestMoves(p, clock, opts) {
   const out = outcomes(p, clock);
   for (const o of out) {
     o.replies = replies(p, o);
-    o.blunder = trap(o);                        // horizon-1 value
-    if (depth > 1 && o.winner === DRAW && o.replies) {
+    o.blunder = trap(o);                        // uniform, one move
+    o.blunderUniform = o.blunder;
+    if (depth > 1 && o.winner !== mover && o.replies) {
       const undo = B.makeMove(p, o.move);
-      o.blunder = blunderProb(p, depth);
+      o.blunder = blunderProb(p, depth, false);         // modelled opponent
+      o.blunderUniform = blunderProb(p, depth, true);   // uniform opponent (tie-break)
       B.unmakeMove(p, o.move, undo);
     }
   }
@@ -167,11 +205,13 @@ function bestMoves(p, clock, opts) {
   const len = r => r.d !== undefined ? r.d : r.t;
   out.sort((a, b) => {
     const d = score(b) - score(a); if (d) return d;
-    if (a.winner === mover) return len(a) - len(b);
-    if (a.winner === DRAW) return (b.blunder - a.blunder) || (trap(b) - trap(a));
-    return (len(b) - len(a)) || ((a.replies ? a.replies.oppWins : 0) - (b.replies ? b.replies.oppWins : 0));
+    if (a.winner === mover) return len(a) - len(b);                                   // win: fastest
+    const t = (b.blunder - a.blunder) || (b.blunderUniform - a.blunderUniform) || (trap(b) - trap(a));
+    if (t) return t;                                                                  // draw or loss: most likely to trick the opponent
+    if (a.winner === DRAW) return 0;
+    return (len(b) - len(a)) || ((a.replies ? a.replies.oppWins : 0) - (b.replies ? b.replies.oppWins : 0));   // loss: then slowest
   });
   return out;
 }
 
-module.exports = { lookup, value, outcomes, bestMoves, trap, blunderProb, available, WOLF, LAMB, DRAW, CLOCK, TABLES };
+module.exports = { lookup, value, outcomes, bestMoves, trap, blunderProb, replyWeight, MODEL, available, WOLF, LAMB, DRAW, CLOCK, TABLES };

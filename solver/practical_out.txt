@@ -1,0 +1,3 @@
+
+== table player ranking: plain
+  table LAMB vs greedy wolf (always captures, else max mobility) win  60  draw   0  loss   0

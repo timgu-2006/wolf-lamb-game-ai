@@ -467,7 +467,7 @@
   //   winning  -> the fastest win;
   //   drawn    -> the drawing move that gives a random opponent the highest chance of being lost
   //               within three moves (server-computed), one-move fraction as tie-break;
-  //   lost     -> the slowest loss, preferring the fewest winning replies for the opponent.
+  //   lost     -> the move after which the modelled opponent is most likely to throw the win away, then slowest.
   // The engine's ranking breaks whatever ties remain.
   // blunder probability over 3 opponent moves (server), falling back to the one-move fraction
   function trapScore(m) { return typeof m.blunder === 'number' ? m.blunder : (m.replies && m.replies.n ? m.replies.oppLoses / m.replies.n : 0); }
@@ -484,9 +484,10 @@
       const topNow = Math.max(...cands.map(trapNow));
       same = cands.filter(m => trapNow(m) === topNow);
     } else {
-      const losses = o.moves.filter(m => m.winner === best.winner && moveLen(m) === moveLen(best));
-      const fewest = Math.min(...losses.map(m => m.replies ? m.replies.oppWins : 0));
-      same = losses.filter(m => (m.replies ? m.replies.oppWins : 0) === fewest);
+      const top = Math.max(...o.moves.map(trapScore));
+      const swindles = o.moves.filter(m => trapScore(m) === top);
+      const slowest = Math.max(...swindles.map(moveLen));
+      same = swindles.filter(m => moveLen(m) === slowest);
     }
     for (const e of engineMoves || []) {
       const em = B.toEngineMove(e.move);
@@ -500,14 +501,15 @@
     return moves.slice().sort((a, b) => {
       const d = rank(b) - rank(a); if (d) return d;
       if (a.winner === mover) return moveLen(a) - moveLen(b);
-      if (a.winner === 3) return (trapScore(b) - trapScore(a)) || (trapNow(b) - trapNow(a));
+      const t = (trapScore(b) - trapScore(a)) || (trapNow(b) - trapNow(a));
+      if (t || a.winner === 3) return t;
       return (moveLen(b) - moveLen(a)) || ((a.replies ? a.replies.oppWins : 0) - (b.replies ? b.replies.oppWins : 0));
     });
   }
   function repliesText(m) {
     if (!m.replies) return '';
     const r = m.replies;
-    if (m.winner === 3 && typeof m.blunder === 'number') return 'lost within 3 moves: ' + Math.round(m.blunder * 100) + '% · now ' + r.oppLoses + '/' + r.n;
+    if (typeof m.blunder === 'number') return (m.winner === 3 ? 'loses within 3 moves: ' : 'errs within 3 moves: ') + Math.round(m.blunder * 100) + '% · now ' + r.oppLoses + '/' + r.n;
     return r.oppLoses + ' of ' + r.n + ' replies lose';
   }
   $('oracleConnect').addEventListener('click', async () => { await Oracle.check(); ensureAllOracle(); schedule(); });

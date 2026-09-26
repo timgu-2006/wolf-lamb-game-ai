@@ -18,7 +18,8 @@ const AI = require(path.join(__dirname, '..', 'ai.js'));
 const NAME = ['', 'WOLF', 'LAMB', 'DRAW'];
 
 function describe(r, mover) {
-  if (r.winner === TB.DRAW) return 'draw' + (r.replies ? ` (opponent lost within 3 moves with probability ${(r.blunder * 100).toFixed(0)}%, ${r.replies.oppLoses} of ${r.replies.n} replies lose at once)` : '');
+  if (r.winner === TB.DRAW) return 'draw' + (r.replies ? ` (modelled opponent loses within 3 moves with probability ${(r.blunder * 100).toFixed(0)}%)` : '');
+  if (r.winner !== mover && r.replies && r.blunder !== undefined && r.d !== undefined) return `loses: ${r.winner === TB.WOLF ? 'wolf' : 'lamb'} ends the game in ${r.dExact === false ? 'at least ' : ''}${r.d} plies; modelled opponent errs within 3 moves with probability ${(r.blunder * 100).toFixed(0)}%`;
   const who = r.winner === mover ? 'wins' : 'loses';
   const side = r.winner === TB.WOLF ? 'wolf' : 'lamb';
   if (r.d !== undefined) return `${who}: ${side} ends the game in ${r.dExact === false ? 'at least ' : ''}${r.d} plies (next capture/trap within ${r.t})`;
@@ -34,9 +35,10 @@ function describe(r, mover) {
 function bestMove(s, hist) {
   const p = B.fromState(s);
   const options = TB.bestMoves(p, s.turnsSinceCapture, { depth: 3 });
+  const mover = s.side;
   const best = options[0];
   const len = o => o.d !== undefined ? o.d : o.t;
-  const tied = options.filter(o => o.winner === best.winner && (best.winner === TB.DRAW ? o.blunder === best.blunder : len(o) === len(best)));
+  const tied = options.filter(o => o.winner === best.winner && (best.winner === mover ? len(o) === len(best) : o.blunder === best.blunder));
   if (tied.length === 1) return { em: B.toEngineMove(best.move), o: best };
   let pick = null, pickScore = -Infinity;
   for (const o of tied) {
