@@ -114,6 +114,8 @@
   .ex-win { color: #2e9e4f; } .ex-draw { color: var(--muted); } .ex-loss { color: #d9534f; }
   #oracleState { color: var(--muted); font-size: 13px; }
   #oracleState.on { color: #2e9e4f; }
+  header .star { margin-left: auto; display: inline-flex; align-items: center; }
+  header .star img { height: 20px; }
   .settings { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center; font-size: 14px; }
   .settings label { color: var(--muted); font-size: 13px; }
   .settings .inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -139,6 +141,9 @@
   <h1>Wolf and Lamb</h1>
   <span class="sub">engine analysis &middot; alpha-beta search on bitboards, running in a Web Worker</span>
   <span id="oracleState">exact tables: checking…</span>
+  <a class="star" href="https://github.com/timgu-2006/wolf-lamb-game-ai" target="_blank" rel="noopener" title="Source code, the solution and the proof; star the repository if you like it">
+    <img alt="Star on GitHub" src="https://img.shields.io/github/stars/timgu-2006/wolf-lamb-game-ai?style=social&label=Star%20on%20GitHub">
+  </a>
 </header>
 <main>
   <div class="col">
